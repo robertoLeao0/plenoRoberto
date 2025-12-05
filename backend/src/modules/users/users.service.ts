@@ -9,8 +9,8 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateUserDto) {
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    return this.prisma.user.create({ data: { ...dto, passwordHash } });
+    const password = await bcrypt.hash(dto.password, 10);
+    return this.prisma.user.create({ data: { ...dto, password } });
   }
 
   async findAll() {
@@ -21,10 +21,14 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
   async update(id: string, dto: UpdateUserDto) {
     const data: any = { ...dto };
     if (dto.password) {
-      data.passwordHash = await bcrypt.hash(dto.password, 10);
+      data.password = await bcrypt.hash(dto.password, 10);
       delete data.password;
     }
     return this.prisma.user.update({ where: { id }, data });

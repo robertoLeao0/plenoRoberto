@@ -1,4 +1,13 @@
 ### Autenticação
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Novo Usuário",
+  "email": "novo@example.com",
+  "password": "senha123"
+}
+
 POST http://localhost:3000/api/auth/login
 Content-Type: application/json
 
