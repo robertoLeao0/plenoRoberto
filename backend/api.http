@@ -1,0 +1,46 @@
+### Autenticação
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@pleno.com",
+  "password": "senha123"
+}
+
+### Refresh
+POST http://localhost:3000/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "<token>"
+}
+
+### Criar município
+POST http://localhost:3000/api/municipalities
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "Cidade Exemplo",
+  "state": "SP"
+}
+
+### Criar mensagem agendada
+POST http://localhost:3000/api/messages
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "Motivação do dia 1",
+  "content": "Vamos juntos na jornada!",
+  "type": "DAILY",
+  "sendDate": "2024-12-01T12:00:00Z",
+  "targetAudience": "ALL"
+}
+
+### Upload de imagem
+POST http://localhost:3000/api/uploads
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file=@/path/to/photo.jpg

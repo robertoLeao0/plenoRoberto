@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN_PLENO
+  GESTOR_MUNICIPIO
+  SERVIDOR
+}
+
+enum Category {
+  CORPO
+  MENTE
+  ESPIRITO
+}
+
+enum ActionStatus {
+  PENDENTE
+  CONCLUIDO
+}
+
+enum MessageType {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum TargetAudience {
+  ALL
+  MUNICIPALITY
+  PROJECT
+}
+
+model User {
+  id             String      @id @default(uuid())
+  name           String
+  email          String      @unique
+  passwordHash   String
+  role           Role        @default(SERVIDOR)
+  municipalityId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  actionLogs     ActionLog[]
+  messages       Message[]   @relation("MessageCreator")
+}
+
+model Municipality {
+  id          String     @id @default(uuid())
+  name        String
+  state       String
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  projects    Project[]
+  users       User[]
+}
+
+model Project {
+  id             String      @id @default(uuid())
+  name           String
+  description    String
+  municipalityId String
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean     @default(true)
+  totalDays      Int         @default(21)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  dayTemplates   DayTemplate[]
+  messages       Message[]   @relation("ProjectMessages")
+}
+
+model DayTemplate {
+  id            String      @id @default(uuid())
+  projectId     String
+  dayNumber     Int
+  title         String
+  description   String
+  category      Category
+  points        Int          @default(1)
+  requiresPhoto Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+
+  project       Project     @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, dayNumber], name: "projectId_dayNumber")
+}
+
+model ActionLog {
+  id           String       @id @default(uuid())
+  userId       String
+  projectId    String
+  dayNumber    Int
+  status       ActionStatus @default(PENDENTE)
+  photoUrl     String?
+  notes        String?
+  points       Int          @default(1)
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  project      Project      @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, projectId, dayNumber], name: "userId_projectId_dayNumber")
+}
+
+model Message {
+  id              String          @id @default(uuid())
+  title           String
+  content         String
+  type            MessageType
+  sendDate        DateTime
+  status          MessageStatus   @default(PENDING)
+  targetAudience  TargetAudience
+  municipalityId  String?
+  projectId       String?
+  createdById     String
+  createdBy       User            @relation("MessageCreator", fields: [createdById], references: [id])
+  project         Project?        @relation("ProjectMessages", fields: [projectId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
