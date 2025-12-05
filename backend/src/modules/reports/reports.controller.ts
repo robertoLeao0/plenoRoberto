@@ -15,7 +15,7 @@ export class ReportsController {
     return this.service.summary(projectId);
   }
 
-  @Roles(Role.ADMIN_PLENO)
+  @Roles(Role.ADMIN)
   @Get('export')
   @Header('Content-Type', 'text/csv')
   export(@Param('projectId') projectId: string) {

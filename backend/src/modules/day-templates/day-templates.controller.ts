@@ -11,7 +11,7 @@ import { Role } from '../../common/enums/role.enum';
 export class DayTemplatesController {
   constructor(private readonly service: DayTemplatesService) {}
 
-  @Roles(Role.ADMIN_PLENO)
+  @Roles(Role.ADMIN)
   @Post()
   createBatch(@Param('projectId') projectId: string, @Body() templates: CreateDayTemplateDto[]) {
     return this.service.createBatch(projectId, templates);
@@ -22,7 +22,7 @@ export class DayTemplatesController {
     return this.service.findAll(projectId);
   }
 
-  @Roles(Role.ADMIN_PLENO)
+  @Roles(Role.ADMIN)
   @Patch(':dayNumber')
   update(
     @Param('projectId') projectId: string,

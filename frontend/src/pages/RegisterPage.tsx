@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useRegister } from '../hooks/useAuth';
 
 const roleToPath: Record<string, string> = {
-  ADMIN_PLENO: '/dashboard/admin',
-  GESTOR_MUNICIPIO: '/dashboard/gestor',
-  SERVIDOR: '/dashboard/servidor',
+  ADMIN: '/dashboard-admin',
+  GESTOR: '/dashboard-gestor',
+  SERVIDOR: '/dashboard-servidor',
 };
 
 export default function RegisterPage() {
@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const result = await register.mutateAsync({ name, email, password });
-    const path = roleToPath[result.user?.role] ?? '/dashboard/servidor';
+    const path = roleToPath[result.user?.role] ?? '/dashboard-servidor';
     navigate(path);
   };
 

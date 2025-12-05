@@ -5,11 +5,15 @@ type LoginPayload = { email: string; password: string };
 type RegisterPayload = { name: string; email: string; password: string };
 
 const persistSession = (data: any) => {
-  localStorage.setItem('accessToken', data.accessToken);
+  if (data.accessToken) {
+    localStorage.setItem('token', data.accessToken);
+    localStorage.setItem('accessToken', data.accessToken);
+  }
   if (data.refreshToken) {
     localStorage.setItem('refreshToken', data.refreshToken);
   }
   if (data.user) {
+    localStorage.setItem('role', data.user.role);
     localStorage.setItem('currentUser', JSON.stringify(data.user));
   }
   return data;

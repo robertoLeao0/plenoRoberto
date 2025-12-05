@@ -12,7 +12,7 @@ import { Role } from '../../common/enums/role.enum';
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  @Roles(Role.ADMIN_PLENO)
+  @Roles(Role.ADMIN)
   @Post()
   create(@Body() dto: CreateProjectDto) {
     return this.projectsService.create(dto);
@@ -31,7 +31,7 @@ export class ProjectsController {
     return this.projectsService.findOne(id);
   }
 
-  @Roles(Role.ADMIN_PLENO)
+  @Roles(Role.ADMIN)
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
     return this.projectsService.update(id, dto);

@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLogin, useRegister } from '../hooks/useAuth';
 
 const roleToPath: Record<string, string> = {
-  ADMIN_PLENO: '/dashboard/admin',
-  GESTOR_MUNICIPIO: '/dashboard/gestor',
-  SERVIDOR: '/dashboard/servidor',
+  ADMIN: '/dashboard-admin',
+  GESTOR: '/dashboard-gestor',
+  SERVIDOR: '/dashboard-servidor',
 };
 
 export default function LoginPage() {
@@ -17,20 +17,20 @@ export default function LoginPage() {
   const login = useLogin();
   const register = useRegister();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+    const handleSubmit = async (e: FormEvent) => {
+      e.preventDefault();
 
-    if (mode === 'login') {
-      const result = await login.mutateAsync({ email, password });
-      const path = roleToPath[result.user?.role] ?? '/dashboard/servidor';
+      if (mode === 'login') {
+        const result = await login.mutateAsync({ email, password });
+        const path = roleToPath[result.user?.role] ?? '/dashboard-servidor';
+        navigate(path);
+        return;
+      }
+
+      const result = await register.mutateAsync({ name, email, password });
+      const path = roleToPath[result.user?.role] ?? '/dashboard-servidor';
       navigate(path);
-      return;
-    }
-
-    const result = await register.mutateAsync({ name, email, password });
-    const path = roleToPath[result.user?.role] ?? '/dashboard/servidor';
-    navigate(path);
-  };
+    };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-sky-50">

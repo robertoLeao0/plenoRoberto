@@ -7,9 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN_PLENO
-  GESTOR_MUNICIPIO
+enum UserRole {
+  ADMIN
+  GESTOR
   SERVIDOR
 }
 
@@ -47,7 +47,7 @@ model User {
   name           String
   email          String      @unique
   password       String
-  role           Role        @default(SERVIDOR)
+  role           UserRole    @default(SERVIDOR)
   municipalityId String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt

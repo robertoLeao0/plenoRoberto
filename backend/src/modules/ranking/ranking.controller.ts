@@ -16,7 +16,7 @@ export class RankingController {
     return this.service.topTen(projectId, user.id);
   }
 
-  @Roles(Role.GESTOR_MUNICIPIO, Role.ADMIN_PLENO)
+  @Roles(Role.GESTOR, Role.ADMIN)
   @Get('full')
   full(@Param('projectId') projectId: string, @Query('municipalityId') municipalityId?: string) {
     return this.service.fullRanking(projectId, municipalityId);

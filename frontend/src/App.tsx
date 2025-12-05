@@ -4,15 +4,37 @@ import RegisterPage from './pages/RegisterPage';
 import ServidorDashboard from './pages/ServidorDashboard';
 import GestorDashboard from './pages/GestorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import { PrivateRoute } from './components/PrivateRoute';
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/dashboard/servidor" element={<ServidorDashboard />} />
-      <Route path="/dashboard/gestor" element={<GestorDashboard />} />
-      <Route path="/dashboard/admin" element={<AdminDashboard />} />
+      <Route
+        path="/dashboard-servidor"
+        element={
+          <PrivateRoute roles={['SERVIDOR', 'GESTOR', 'ADMIN']}>
+            <ServidorDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/dashboard-gestor"
+        element={
+          <PrivateRoute roles={['GESTOR', 'ADMIN']}>
+            <GestorDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/dashboard-admin"
+        element={
+          <PrivateRoute roles={['ADMIN']}>
+            <AdminDashboard />
+          </PrivateRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>
   );
