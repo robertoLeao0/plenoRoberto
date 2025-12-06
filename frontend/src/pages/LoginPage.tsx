@@ -17,7 +17,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const result = await login.mutateAsync({ email, password });
-    const path = roleToPath[result.user.role] ?? '/dashboard/servidor';
+    const path = roleToPath[(result as { user: { role: string } }).user.role] ?? '/dashboard/servidor';
     navigate(path);
   };
 

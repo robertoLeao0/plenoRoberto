@@ -8,7 +8,6 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { DayTemplatesModule } from './modules/day-templates/day-templates.module';
 import { ActionLogsModule } from './modules/action-logs/action-logs.module';
 import { RankingModule } from './modules/ranking/ranking.module';
-import { UploadsModule } from './modules/uploads/uploads.module';
 import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
@@ -21,7 +20,6 @@ import { ReportsModule } from './modules/reports/reports.module';
     DayTemplatesModule,
     ActionLogsModule,
     RankingModule,
-    UploadsModule,
     ReportsModule,
   ],
   providers: [PrismaService],
