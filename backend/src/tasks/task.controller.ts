@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
-import { TaskService } from './task.service'; // Importando do arquivo singular
+import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 
 @Controller('tasks')

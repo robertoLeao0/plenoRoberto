@@ -7,4 +7,4 @@ import { PrismaService } from '../database/prisma.service';
   controllers: [TaskController],
   providers: [TaskService, PrismaService],
 })
-export class TaskModule {} // Nome da classe corrigido para singular
+export class TaskModule {}

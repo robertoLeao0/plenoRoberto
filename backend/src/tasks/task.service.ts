@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service'; // Caminho corrigido
+import { PrismaService } from '../database/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 
 @Injectable()
-export class TaskService { // Nome singular para combinar com seu arquivo
+export class TaskService { // <--- NOME NO SINGULAR (Sem S no final de Task)
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateTaskDto) {
@@ -12,7 +12,7 @@ export class TaskService { // Nome singular para combinar com seu arquivo
         nome: data.nome,
         descricao: data.descricao,
         dataPrevista: new Date(data.dataPrevista),
-        ativo: true,
+        ativo: data.ativo ?? true,
       },
     });
   }
