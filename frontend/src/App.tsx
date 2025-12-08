@@ -16,6 +16,7 @@ import ServidorDashboard from './pages/servidor/dashboard';
 import ServidorRanking from './pages/servidor/ranking';
 import ServidorSettings from './pages/servidor/settings';
 import Support from './pages/servidor/support';
+import ServerTasks from './pages/servidor/tasks';
 
 // Páginas do Gestor
 import GestorDashboard from './pages/gestor/dashboard';
@@ -65,6 +66,7 @@ function DashboardWrapper() {
         <Route path="servidor/ranking" element={<ServidorRanking />} />
         <Route path="servidor/settings" element={<ServidorSettings />} />
         <Route path="servidor/support" element={<Support />} />
+        <Route path="servidor/tarefas" element={<ServerTasks />} />
 
         {/* Rotas Específicas do Admin */}
         <Route path="admin" element={<AdminDashboard />} />

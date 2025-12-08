@@ -15,7 +15,11 @@ export default function ProjectsList() {
   const [filter, setFilter] = useState<'active' | 'inactive'>('active');
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   
-  // States do Modal de Exclusão Real
+  // --- NOVOS STATES PARA OS FILTROS ---
+  const [busca, setBusca] = useState('');
+  const [dataFiltro, setDataFiltro] = useState('');
+
+  // States do Modal
   const [modalAberto, setModalAberto] = useState(false);
   const [tarefaParaExcluir, setTarefaParaExcluir] = useState<number | null>(null);
 
@@ -33,27 +37,22 @@ export default function ProjectsList() {
     }
   };
 
-  // --- AÇÃO 1: Mudar Status (Ativar/Inativar) SEM CONFIRMAÇÃO ---
   const handleToggleStatus = async (task: Task) => {
-    const novoStatus = !task.ativo; // Inverte o status atual
-    
+    const novoStatus = !task.ativo;
     try {
-      // Usamos PATCH para atualizar apenas o status
       await fetch(`http://localhost:3000/api/tasks/${task.id}`, { 
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ativo: novoStatus }) 
       });
-      
-      toast.success(novoStatus ? 'Tarefa ativada!' : 'Tarefa inativada.');
-      fetchTasks(); // Atualiza a lista
-      setMenuOpenId(null); // Fecha o menu
+      toast.success(novoStatus ? 'Tarefa reativada! 🚀' : 'Tarefa inativada. 💤');
+      fetchTasks();
+      setMenuOpenId(null);
     } catch (error) {
       toast.error('Erro ao alterar status.');
     }
   };
 
-  // --- AÇÃO 2: Exclusão Real (Abre Modal) ---
   const confirmarExclusao = (id: number) => {
     setTarefaParaExcluir(id);
     setModalAberto(true);
@@ -62,11 +61,9 @@ export default function ProjectsList() {
 
   const executarExclusaoReal = async () => {
     if (tarefaParaExcluir === null) return;
-
     try {
-      // Chama o DELETE (que agora apaga do banco)
       await fetch(`http://localhost:3000/api/tasks/${tarefaParaExcluir}`, { method: 'DELETE' });
-      toast.success('Tarefa excluída permanentemente!');
+      toast.success('Tarefa excluída permanentemente! 🗑️');
       fetchTasks();
     } catch (error) {
       toast.error('Erro ao excluir tarefa.');
@@ -76,9 +73,24 @@ export default function ProjectsList() {
     }
   };
 
-  const filteredTasks = tasks.filter(task => 
-    filter === 'active' ? task.ativo === true : task.ativo === false
-  );
+  // --- LÓGICA DE FILTRAGEM ATUALIZADA ---
+  const filteredTasks = tasks.filter(task => {
+    // 1. Filtro da Aba (Ativo/Inativo)
+    const matchesTab = filter === 'active' ? task.ativo === true : task.ativo === false;
+
+    // 2. Filtro de Texto (Nome)
+    const matchesBusca = task.nome.toLowerCase().includes(busca.toLowerCase());
+
+    // 3. Filtro de Data (Se tiver data selecionada)
+    let matchesData = true;
+    if (dataFiltro) {
+      // Pega apenas a parte YYYY-MM-DD da data da tarefa para comparar
+      const taskDate = task.dataPrevista.split('T')[0]; 
+      matchesData = taskDate === dataFiltro;
+    }
+
+    return matchesTab && matchesBusca && matchesData;
+  });
 
   useEffect(() => {
     fetchTasks();
@@ -98,13 +110,47 @@ export default function ProjectsList() {
       </div>
 
       {/* ABAS */}
-      <div className="flex space-x-6 border-b mb-4">
+      <div className="flex space-x-6 border-b mb-6">
         <button onClick={(e) => { e.stopPropagation(); setFilter('active'); }} className={`pb-2 px-1 ${filter === 'active' ? 'border-b-2 border-indigo-600 text-indigo-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}>
           Ativos ({tasks.filter(t => t.ativo).length})
         </button>
         <button onClick={(e) => { e.stopPropagation(); setFilter('inactive'); }} className={`pb-2 px-1 ${filter === 'inactive' ? 'border-b-2 border-indigo-600 text-indigo-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}>
           Inativos ({tasks.filter(t => !t.ativo).length})
         </button>
+      </div>
+
+      {/* --- BARRA DE FILTROS --- */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Buscar por nome</label>
+          <input 
+            type="text" 
+            placeholder="Digite o nome da tarefa..." 
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Filtrar por Data</label>
+          <div className="flex gap-2">
+            <input 
+              type="date" 
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+            />
+            {dataFiltro && (
+              <button 
+                onClick={() => setDataFiltro('')}
+                className="text-gray-500 hover:text-red-600 text-sm font-medium px-2"
+                title="Limpar data"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* TABELA */}
@@ -122,10 +168,10 @@ export default function ProjectsList() {
             {loading ? (
               <tr><td colSpan={4} className="px-6 py-4 text-center">Carregando...</td></tr>
             ) : filteredTasks.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Nenhuma tarefa nesta aba.</td></tr>
+              <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Nenhuma tarefa encontrada com esses filtros.</td></tr>
             ) : (
               filteredTasks.map((task) => (
-                <tr key={task.id}>
+                <tr key={task.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{task.nome}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {new Date(task.dataPrevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
@@ -146,34 +192,29 @@ export default function ProjectsList() {
                       ⋮
                     </button>
                     
-                    {/* MENU FLUTUANTE - LÓGICA DIFERENTE PARA ATIVO/INATIVO */}
                     {menuOpenId === task.id && (
                       <div className="absolute right-8 top-0 mt-2 w-32 bg-white border rounded-md shadow-lg z-50">
-                        
-                        {/* 1. EDITAR (Aparece sempre) */}
                         <button onClick={() => navigate(`edit/${task.id}`)} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                           Editar
                         </button>
 
-                        {/* 2. LÓGICA SE ESTIVER ATIVO */}
                         {task.ativo ? (
                           <button 
-                            onClick={() => handleToggleStatus(task)} // Inativa direto
+                            onClick={() => handleToggleStatus(task)}
                             className="block w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-gray-100"
                           >
                             Inativar
                           </button>
                         ) : (
-                        /* 3. LÓGICA SE ESTIVER INATIVO */
                           <>
                             <button 
-                              onClick={() => handleToggleStatus(task)} // Ativa direto
+                              onClick={() => handleToggleStatus(task)}
                               className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
                             >
                               Ativar
                             </button>
                             <button 
-                              onClick={() => confirmarExclusao(task.id)} // Excluir com Modal
+                              onClick={() => confirmarExclusao(task.id)}
                               className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 border-t"
                             >
                               Excluir
@@ -190,7 +231,7 @@ export default function ProjectsList() {
         </table>
       </div>
 
-      {/* MODAL DE EXCLUSÃO (Só aparece quando clica em excluir nos inativos) */}
+      {/* MODAL */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
@@ -199,18 +240,8 @@ export default function ProjectsList() {
               Esta tarefa será apagada do banco de dados e não poderá ser recuperada.
             </p>
             <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setModalAberto(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={executarExclusaoReal}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
-              >
-                Sim, excluir
-              </button>
+              <button onClick={() => setModalAberto(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={executarExclusaoReal} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium">Sim, excluir</button>
             </div>
           </div>
         </div>
