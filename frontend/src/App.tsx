@@ -1,9 +1,8 @@
+// src/App.tsx
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useQuery } from '@tanstack/react-query'; 
-
-// === NOVAS IMPORTAÇÕES ORGANIZADAS ===
 
 // Auth
 import LoginPage from './pages/auth/Login';
@@ -11,17 +10,13 @@ import LoginPage from './pages/auth/Login';
 // Layouts
 import MainLayout from './components/layouts/MainLayout'; 
 
-// Páginas do Servidor
+// Páginas
 import ServidorDashboard from './pages/servidor/dashboard';
 import ServidorRanking from './pages/servidor/ranking';
 import ServidorSettings from './pages/servidor/settings';
 import Support from './pages/servidor/support';
 import ServerTasks from './pages/servidor/tasks';
-
-// Páginas do Gestor
 import GestorDashboard from './pages/gestor/dashboard';
-
-// Páginas do Admin
 import AdminDashboard from './pages/admin/dashboard';
 import AdminUsersList from './pages/admin/users/List';
 import AdminCreateUser from './pages/admin/users/Create';
@@ -29,16 +24,23 @@ import AdminProjectsList from './pages/admin/projects/List';
 import AdminProjectCreate from './pages/admin/projects/Create';
 import EditTask from './pages/admin/projects/Edit';
 import ProjectTasks from './pages/admin/projects/Tasks';
-
 import Integrations from './pages/admin/integrations';
-
+import UserProfile from './pages/common/UserProfile'; 
 
 // Serviços
 import api from './services/api'; 
 
-// Componente que lida com o redirecionamento e carrega o layout
+// Tipagem do Usuário
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'GESTOR_ORGANIZACAO' | 'USUARIO';
+  avatarUrl?: string;
+}
+
 function DashboardWrapper() {
-  const { data: user, isLoading } = useQuery<{role: 'ADMIN_PLENO' | 'GESTOR_MUNICIPIO' | 'SERVIDOR'}>({
+  const { data: user, isLoading } = useQuery<User>({
     queryKey: ['user-me'],
     queryFn: async () => {
       const { data } = await api.get('/auth/me');
@@ -48,29 +50,41 @@ function DashboardWrapper() {
   });
 
   if (isLoading) {
-    return <div className="p-6 text-center">Carregando perfil...</div>;
+    return <div className="p-6 text-center">Carregando sistema...</div>;
   }
   
   if (!user || !user.role) {
     return <Navigate to="/login" replace />;
   }
   
-  // Determina a rota base para redirecionamento
-  const userBaseRoute = `/dashboard/${user.role.toLowerCase().replace('_', '-')}`;
-  const isDashboardRoute = window.location.pathname.endsWith(userBaseRoute);
+  // === LÓGICA DE REDIRECIONAMENTO ATUALIZADA ===
+  const getDashboardPath = (role: string) => {
+    switch(role) {
+      case 'ADMIN': return '/dashboard/admin';
+      case 'GESTOR_ORGANIZACAO': return '/dashboard/gestor';
+      case 'USUARIO': return '/dashboard/servidor'; // Usuário cai na tela de servidor
+      default: return '/dashboard/servidor';
+    }
+  };
 
-  // Renderiza o Layout que recebe a Role para desenhar o menu correto
+  const userBaseRoute = getDashboardPath(user.role);
+  // Verifica se estamos na raiz do dashboard para redirecionar
+  const isExactDashboard = window.location.pathname === '/dashboard' || window.location.pathname === '/dashboard/';
+
   return (
-    <MainLayout userRole={user.role}>
+    // Agora passamos o objeto USER inteiro para o MainLayout
+    <MainLayout user={user}>
       <Routes>
-        {/* Rotas Específicas do Servidor */}
+        <Route path="configuracoes" element={<UserProfile />} />
+
+        {/* Rotas de Usuário (Antigo Servidor) */}
         <Route path="servidor" element={<ServidorDashboard />} />
         <Route path="servidor/ranking" element={<ServidorRanking />} />
         <Route path="servidor/settings" element={<ServidorSettings />} />
         <Route path="servidor/support" element={<Support />} />
         <Route path="servidor/tarefas" element={<ServerTasks />} />
 
-        {/* Rotas Específicas do Admin */}
+        {/* Rotas de Admin */}
         <Route path="admin" element={<AdminDashboard />} />
         <Route path="admin/users" element={<AdminUsersList />} />
         <Route path="admin/users/create" element={<AdminCreateUser />} />
@@ -78,31 +92,26 @@ function DashboardWrapper() {
         <Route path="admin/projects/create" element={<AdminProjectCreate />} />
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
+        <Route path="admin/integrations" element={<Integrations />} />
+
+        {/* Rotas de Gestor */}
         <Route path="gestor" element={<GestorDashboard />} />
 
-        <Route path="/admin/integrations" element={<Integrations />} />
-        
-        
-        {/* Rota Padrão: Redireciona para o dashboard correto */}
-        {isDashboardRoute && <Route path="/" element={<Navigate to={userBaseRoute} replace />} />}
+        {/* Redirecionamento Automático */}
+        {isExactDashboard && <Route path="/" element={<Navigate to={userBaseRoute} replace />} />}
         
       </Routes>
     </MainLayout>
   );
 }
 
-
 function App() {
   return (
     <>
-      <ToastContainer autoClose={3000} position="top-right" aria-label="Notifications" />
-
+      <ToastContainer autoClose={3000} position="top-right" />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        
-        {/* O DashboardWrapper vai pegar o perfil logado e decidir qual Layout/Menu usar */}
         <Route path="/dashboard/*" element={<DashboardWrapper />} /> 
-
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </>

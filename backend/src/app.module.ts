@@ -13,11 +13,13 @@ import { TaskModule } from './tasks/task.module';
 
 // integrations
 import { IntegrationsModule } from './integrations/integrations.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     MunicipalitiesModule,

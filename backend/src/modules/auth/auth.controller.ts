@@ -1,21 +1,32 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UsersService } from '../users/users.service'; // <--- IMPORTANTE: Importar o UsersService
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  // Injete o UsersService no construtor
+  constructor(
+    private authService: AuthService,
+    private usersService: UsersService, 
+  ) {}
 
   @Post('login')
-  async login(@Body() payload: LoginDto) {
-    return this.authService.login(payload);
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@CurrentUser() user: any) {
-    return user;
+  async getProfile(@Request() req) {
+    // CORREÇÃO: Em vez de retornar "req.user" (que só tem id e role),
+    // buscamos o usuário completo no banco usando o ID.
+    const user = await this.usersService.findOne(req.user.id);
+    
+    // Removemos a senha antes de enviar para garantir segurança
+    const { password, ...result } = user;
+    
+    return result;
   }
 }

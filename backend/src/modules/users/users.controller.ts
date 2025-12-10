@@ -1,38 +1,50 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { 
+  Controller, 
+  Put, 
+  Body, 
+  UseGuards, 
+  Req, 
+  UseInterceptors, 
+  UploadedFile 
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../common/enums/role.enum';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+
+// === CONFIGURAÇÃO AJUSTADA ===
+const storageConfig = diskStorage({
+  // 1. Agora salva dentro da subpasta avatars
+  destination: './uploads/avatars', 
+  filename: (req, file, callback) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = extname(file.originalname);
+    callback(null, `avatar-${uniqueSuffix}${ext}`);
+  },
+});
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Roles(UserRole.ADMIN_PLENO)
-  @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
-  }
+  @UseGuards(JwtAuthGuard)
+  @Put('profile')
+  @UseInterceptors(FileInterceptor('avatar', { storage: storageConfig }))
+  async updateProfile(
+    @Req() req,
+    @Body() body: { name: string },
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    const userId = req.user.id;
+    
+    // 2. A URL agora inclui /avatars/
+    // ATENÇÃO: Ajuste a porta se necessário (ex: 3000 ou 3333)
+    const avatarUrl = file ? `http://localhost:3000/uploads/avatars/${file.filename}` : undefined;
 
-  @Roles(UserRole.ADMIN_PLENO)
-  @Get()
-  findAll() {
-    return this.usersService.findAll();
-  }
+    const updateData: any = { name: body.name };
+    if (avatarUrl) updateData.avatarUrl = avatarUrl;
 
-  @Roles(UserRole.ADMIN_PLENO)
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(id, dto);
-  }
-
-  @Roles(UserRole.ADMIN_PLENO)
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.softDelete(id);
+    return this.usersService.update(userId, updateData);
   }
 }

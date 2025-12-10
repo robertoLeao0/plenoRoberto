@@ -11,6 +11,7 @@ import { ManychatTestController } from './manychat/manychat-test.controller';
 // Scheduler pieces
 import { ScheduledMessagesService } from './scheduler/scheduled-messages.service';
 import { ScheduledMessagesController } from './scheduler/scheduled-messages.controller';
+import { TasksSchedulerService } from './scheduler/tasks-scheduler.service';
 
 // Integration settings module (settings / upsert)
 import { IntegrationsSettingsModule } from './settings/integrations-settings.module';
@@ -29,6 +30,7 @@ import { IntegrationsSettingsModule } from './settings/integrations-settings.mod
     ManyChatService,
     ManychatConnectionService,
     ScheduledMessagesService,
+    TasksSchedulerService,
   ],
   exports: [
     ManyChatService,

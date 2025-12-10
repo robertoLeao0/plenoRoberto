@@ -1,76 +1,53 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class TaskService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // --- NOVO MÉTODO: Verifica e Inativa tarefas vencidas ---
-  private async verificarTarefasVencidas() {
-    const hoje = new Date();
-    // Zera o horário para comparar apenas a data (opcional, depende da sua regra)
-    hoje.setHours(0, 0, 0, 0);
-
-    // Atualiza para 'ativo: false' tudo que for menor que hoje e estiver ativo
-    await this.prisma.task.updateMany({
-      where: {
-        ativo: true,
-        dataPrevista: { lt: hoje }, // lt = less than (menor que)
-      },
-      data: { ativo: false },
-    });
-  }
-
   async create(data: CreateTaskDto) {
     return await this.prisma.task.create({
       data: {
-        nome: data.nome,
-        descricao: data.descricao,
-        dataPrevista: new Date(data.dataPrevista),
-        ativo: data.ativo ?? true,
+        title: data.title,
+        content: data.content,
+        sendAt: new Date(data.sendAt),
+        status: data.status || TaskStatus.AGENDADO, // Se não passar, cria como Agendado
+        project: { connect: { id: data.projectId } },
       },
     });
   }
 
-  async findAllActive() {
-    // Antes de devolver a lista, arruma a casa
-    await this.verificarTarefasVencidas(); 
-
+  // Busca todas as tarefas de um projeto específico
+  async findAllByProject(projectId: string) {
     return await this.prisma.task.findMany({
-      where: { ativo: true },
-      orderBy: { dataPrevista: 'asc' },
+      where: { projectId },
+      orderBy: { sendAt: 'asc' },
+      include: {
+        logs: true, // Traz o histórico de envios junto (opcional)
+      },
     });
   }
 
-  async findAllAdmin() {
-    // Aqui também, para garantir que o admin veja o status real
-    await this.verificarTarefasVencidas();
-
-    return await this.prisma.task.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async findOne(id: number) {
+  async findOne(id: string) {
     return await this.prisma.task.findUnique({
       where: { id },
     });
   }
 
-  async update(id: number, data: any) {
+  async update(id: string, data: any) {
+    const { sendAt, ...rest } = data;
     return await this.prisma.task.update({
       where: { id },
       data: {
-        nome: data.nome,
-        descricao: data.descricao,
-        dataPrevista: data.dataPrevista ? new Date(data.dataPrevista) : undefined,
-        ativo: data.ativo,
+        ...rest,
+        ...(sendAt ? { sendAt: new Date(sendAt) } : {}),
       },
     });
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     return await this.prisma.task.delete({
       where: { id },
     });

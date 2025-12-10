@@ -1,157 +1,199 @@
-import { ReactNode, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-// Importação dos ícones do React Icons
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FaUserFriends, FaSignOutAlt, FaCog, FaChartBar, FaBars, 
-  FaCheckSquare, FaTrophy, FaHeadset, FaProjectDiagram, FaPlug 
-} from 'react-icons/fa';
+  LayoutDashboard, 
+  Building2, 
+  Users, 
+  FolderKanban, 
+  Plug, 
+  LogOut, 
+  Menu, 
+  X,
+  Trophy,
+  LifeBuoy,
+  CheckSquare,
+  Settings,
+  UserCircle
+} from 'lucide-react';
 
-// --- DEFINIÇÃO DE TIPOS ---
-interface LayoutProps {
-  children: ReactNode; // O conteúdo da página (Dashboard, Listas, Forms, etc.)
-  userRole: 'ADMIN_PLENO' | 'GESTOR_MUNICIPIO' | 'SERVIDOR'; // Quem está logado
+// === TIPAGEM DO USUÁRIO ===
+// Precisa bater com o que vem do Backend
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'GESTOR_ORGANIZACAO' | 'USUARIO';
+  avatarUrl?: string | null;
+  organization?: {
+    name: string;
+  };
 }
 
-interface NavLink {
-  path: string; // URL do link
-  icon: React.ElementType; // Ícone que vai aparecer
-  label: string; // Texto do link
+interface MainLayoutProps {
+  children: React.ReactNode;
+  user: User; // Recebe o usuário completo
 }
 
-// --- LINKS DO MENU ---
-
-// 1. Links visíveis apenas para ADMINISTRADORES
-const adminNav: NavLink[] = [
-  { path: '/dashboard/admin', icon: FaChartBar, label: 'Painel Principal' },
-  { path: '/dashboard/admin/users', icon: FaUserFriends, label: 'Usuários' },
-  { path: '/dashboard/admin/projects', icon: FaProjectDiagram, label: 'Projetos' },
-  { path: '/dashboard/admin/integrations', icon: FaPlug, label: 'Integrações' }, // <--- Novo Link
-];
-
-// 2. Links visíveis apenas para SERVIDORES
-const servidorNav: NavLink[] = [
-  { path: '/dashboard/servidor', icon: FaCheckSquare, label: 'Tarefas' }, // <--- Alterado de "Tarefas" para "Jornada" se preferir
-  { path: '/dashboard/servidor/ranking', icon: FaTrophy, label: 'Ranking' },
-  { path: '/dashboard/servidor/settings', icon: FaCog, label: 'Configurações' },
-  { path: '/dashboard/servidor/support', icon: FaHeadset, label: 'Suporte' },
-];
-
-// --- FUNÇÃO DE LOGOUT ---
-const handleLogout = () => {
-  localStorage.removeItem('accessToken'); // Remove o token
-  window.location.href = '/login'; // Força redirecionamento e reload
+// === DEFINIÇÃO DOS MENUS POR PERFIL ===
+const MENUS = {
+  ADMIN: [
+    { label: 'Painel Principal', path: '/dashboard/admin', icon: LayoutDashboard },
+    { label: 'Organizações', path: '/dashboard/admin/organizations', icon: Building2 },
+    { label: 'Usuários', path: '/dashboard/admin/users', icon: Users },
+    { label: 'Projetos', path: '/dashboard/admin/projects', icon: FolderKanban },
+    { label: 'Integrações', path: '/dashboard/admin/integrations', icon: Plug },
+  ],
+  GESTOR_ORGANIZACAO: [
+    { label: 'Painel Gestor', path: '/dashboard/gestor', icon: LayoutDashboard },
+    { label: 'Meus Projetos', path: '/dashboard/gestor/projetos', icon: FolderKanban },
+    { label: 'Minha Equipe', path: '/dashboard/gestor/equipe', icon: Users },
+  ],
+  USUARIO: [
+    { label: 'Minha Jornada', path: '/dashboard/servidor', icon: LayoutDashboard },
+    { label: 'Tarefas', path: '/dashboard/servidor/tarefas', icon: CheckSquare },
+    { label: 'Ranking', path: '/dashboard/servidor/ranking', icon: Trophy },
+    { label: 'Suporte', path: '/dashboard/servidor/support', icon: LifeBuoy },
+  ]
 };
 
-export default function MainLayout({ children, userRole }: LayoutProps) {
-  // Controle de abertura/fechamento do menu lateral
-  // Começa aberto se a tela for grande (> 768px), fechado em mobile
-  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
-  
-  // Hook para saber em qual página o usuário está agora
+export default function MainLayout({ children, user }: MainLayoutProps) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
+  const navigate = useNavigate();
 
-  // Define quais links mostrar baseado no perfil do usuário
-  let navLinks: NavLink[] = [];
+  // Seleciona o menu baseado na role do usuário
+  const currentMenu = MENUS[user.role] || [];
 
-  switch (userRole) {
-    case 'ADMIN_PLENO': 
-      navLinks = adminNav; 
-      break;
-    case 'GESTOR_MUNICIPIO': 
-      // Por enquanto vazio, mas você pode criar uma const gestorNav
-      navLinks = []; 
-      break;
-    case 'SERVIDOR': 
-      navLinks = servidorNav; 
-      break;
-  }
+  const handleLogout = () => {
+    localStorage.removeItem('token'); 
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       
-      {/* --- MENU LATERAL (SIDEBAR) --- */}
+      {/* === SIDEBAR === */}
       <aside 
-        className={`bg-slate-900 text-white transition-all duration-300 ${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        } flex flex-col justify-between fixed h-full z-20 shadow-xl`}
+        className={`
+          ${isSidebarOpen ? 'w-64' : 'w-20'} 
+          bg-[#111827] text-white flex flex-col transition-all duration-300 shadow-xl z-20
+          absolute md:relative h-full
+        `}
       >
-        <div>
-          {/* 1. TOPO DO MENU (Título e Botão Hambúrguer) */}
-          <div className={`flex items-center h-16 border-b border-slate-700 mb-6 ${isSidebarOpen ? 'justify-between px-4' : 'justify-center'}`}>
-            {/* Título só aparece se aberto */}
-            {isSidebarOpen && <h1 className="text-lg font-bold tracking-wide">Jornada</h1>}
-            
-            {/* Botão para abrir/fechar menu */}
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-            >
-              <FaBars size={18} />
-            </button>
-          </div>
-          
-          {/* 2. LISTA DE LINKS DE NAVEGAÇÃO */}
-          <nav className="px-2 space-y-1">
-            {navLinks.map((link) => {
-              
-              // --- LÓGICA PARA DESTACAR O LINK ATIVO ---
-              
-              // A. Identifica se é o link do Dashboard Principal ("/")
-              const isRootDashboard = link.path === '/dashboard/admin' || link.path === '/dashboard/servidor' || link.path === '/dashboard/gestor';
-              
-              // B. Se for Dashboard Principal, a URL tem que ser IDÊNTICA.
-              // C. Se for outro (ex: /admin/projects), usamos "startsWith" para que 
-              //    páginas internas (/projects/create) mantenham o menu aceso.
-              const isActive = isRootDashboard 
-                ? location.pathname === link.path 
-                : location.pathname.startsWith(link.path);
+        {/* LOGO */}
+        <div className="h-16 flex items-center justify-between px-6 bg-[#1f2937] border-b border-gray-700">
+          {isSidebarOpen ? (
+            <span className="text-xl font-bold tracking-wider">PLENO</span>
+          ) : (
+            <span className="text-xl font-bold">P</span>
+          )}
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden">
+            <X size={20} />
+          </button>
+        </div>
 
+        {/* NAVEGAÇÃO PRINCIPAL (Cresce com flex-1) */}
+        <nav className="flex-1 overflow-y-auto py-4">
+          <ul className="space-y-1 px-3">
+            {currentMenu.map((item) => {
+              const isActive = location.pathname === item.path;
               return (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`flex items-center rounded-md transition-all duration-200 group ${
-                    isActive 
-                      ? 'bg-indigo-600 text-white shadow-md' // Estilo quando ATIVO
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white' // Estilo padrão
-                  } ${isSidebarOpen ? 'px-4 py-3' : 'p-3 justify-center'}`}
-                  title={link.label} // Tooltip nativo
-                >
-                  {/* Ícone */}
-                  <link.icon size={20} className={`${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
-                  
-                  {/* Texto do Link (só aparece se menu aberto) */}
-                  <span className={`ml-3 whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
-                    {link.label}
-                  </span>
-                </Link>
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    className={`
+                      flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
+                      ${isActive 
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'}
+                    `}
+                  >
+                    <item.icon size={20} />
+                    {isSidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+                  </Link>
+                </li>
               );
             })}
-          </nav>
-        </div>
-        
-        {/* 3. RODAPÉ DO MENU (Botão Sair) */}
-        <div className="border-t border-slate-700 p-2">
-          <button
-            onClick={handleLogout}
-            className={`flex items-center rounded-md hover:bg-red-900/30 text-slate-400 hover:text-red-400 transition duration-150 w-full ${
-                isSidebarOpen ? 'px-4 py-3' : 'p-3 justify-center'
-            }`}
-            title="Sair do sistema"
-          >
-            <FaSignOutAlt size={20} />
-            <span className={`ml-3 whitespace-nowrap transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 w-0 hidden'}`}>
-              Sair
-            </span>
-          </button>
+          </ul>
+        </nav>
+
+        {/* RODAPÉ DO SIDEBAR (CONFIGURAÇÕES E SAIR) */}
+        <div className="p-3 border-t border-gray-800 bg-[#0f1522]">
+          <ul className="space-y-1">
+            {/* Link Configurações */}
+            <li>
+              <Link
+                to="/dashboard/configuracoes"
+                className={`
+                  flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
+                  ${location.pathname === '/dashboard/configuracoes' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'}
+                `}
+              >
+                <Settings size={20} />
+                {isSidebarOpen && <span className="text-sm font-medium">Configurações</span>}
+              </Link>
+            </li>
+            
+            {/* Botão Sair */}
+            <li>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors"
+              >
+                <LogOut size={20} />
+                {isSidebarOpen && <span className="text-sm font-medium">Sair</span>}
+              </button>
+            </li>
+          </ul>
         </div>
       </aside>
 
-      {/* --- ÁREA DE CONTEÚDO PRINCIPAL --- */}
-      {/* O 'ml-64' ou 'ml-20' empurra o conteúdo para não ficar embaixo do menu fixo */}
-      <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'} p-0`}>
-        {children}
-      </main>
+      {/* === ÁREA DE CONTEÚDO === */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        {/* HEADER SUPERIOR */}
+        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 hover:bg-gray-100 rounded-md text-gray-600"
+          >
+            <Menu size={24} />
+          </button>
+
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              {/* NOME: Exibe o nome do usuário */}
+              <p className="text-sm font-bold text-gray-800">
+                {user.name || 'Usuário'}
+              </p>
+              
+              {/* ORGANIZAÇÃO: Exibe o nome ou 'Sem Organização' */}
+              {user.organization ? (
+                 <p className="text-xs text-blue-600 font-medium">{user.organization.name}</p>
+              ) : (
+                 <p className="text-xs text-gray-400">Sem Organização</p>
+              )}
+            </div>
+            
+            {/* AVATAR */}
+            <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 overflow-hidden border border-gray-300">
+               {user.avatarUrl ? (
+                 <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+               ) : (
+                 <UserCircle size={28} />
+               )}
+            </div>
+          </div>
+        </header>
+
+        {/* CONTEÚDO DA PÁGINA (Outlet) */}
+        <main className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

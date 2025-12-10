@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Delete } from '@nestjs/common'; // <--- Adicione Delete aqui
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -35,5 +35,12 @@ export class ProjectsController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
     return this.projectsService.update(id, dto);
+  }
+
+  // --- NOVO MÉTODO PARA EXCLUIR ---
+  @Roles(UserRole.ADMIN_PLENO)
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.projectsService.remove(id);
   }
 }
