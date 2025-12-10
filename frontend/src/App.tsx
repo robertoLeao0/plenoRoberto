@@ -27,6 +27,9 @@ import ProjectTasks from './pages/admin/projects/Tasks';
 import Integrations from './pages/admin/integrations';
 import UserProfile from './pages/common/UserProfile'; 
 
+import OrganizationsList from './pages/admin/organizations/List';
+import OrganizationDetails from './pages/admin/organizations/Details';
+
 // Serviços
 import api from './services/api'; 
 
@@ -93,6 +96,10 @@ function DashboardWrapper() {
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
         <Route path="admin/integrations" element={<Integrations />} />
+
+        {/* === ROTAS DE ORGANIZAÇÃO === */}
+        <Route path="admin/organizations" element={<OrganizationsList />} />
+        <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
 
         {/* Rotas de Gestor */}
         <Route path="gestor" element={<GestorDashboard />} />

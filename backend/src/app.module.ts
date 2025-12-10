@@ -10,10 +10,13 @@ import { ActionLogsModule } from './modules/action-logs/action-logs.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TaskModule } from './tasks/task.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+
 
 // integrations
 import { IntegrationsModule } from './integrations/integrations.module';
 import { ScheduleModule } from '@nestjs/schedule';
+
 
 
 @Module({
@@ -30,6 +33,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ReportsModule,
     TaskModule,
     IntegrationsModule,
+    OrganizationsModule,
   ],
   providers: [PrismaService],
 })
