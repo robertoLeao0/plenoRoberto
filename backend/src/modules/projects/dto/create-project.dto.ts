@@ -1,10 +1,12 @@
-import { IsBoolean, IsDateString, IsNotEmpty, IsOptional, IsPositive } from 'class-validator';
+import { IsBoolean, IsDateString, IsNotEmpty, IsOptional, IsInt, IsString } from 'class-validator';
 
 export class CreateProjectDto {
   @IsNotEmpty()
+  @IsString()
   name: string;
 
   @IsNotEmpty()
+  @IsString()
   description: string;
 
   @IsDateString()
@@ -14,13 +16,14 @@ export class CreateProjectDto {
   endDate: string;
 
   @IsNotEmpty()
-  municipalityId: string;
+  @IsString()
+  organizationId: string; // <--- O CORRETO É ORGANIZATION ID
 
   @IsOptional()
   @IsBoolean()
   isActive?: boolean = true;
 
   @IsOptional()
-  @IsPositive()
+  @IsInt()
   totalDays?: number = 21;
 }

@@ -8,50 +8,55 @@ export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateProjectDto) {
-    // Verifica se o município existe antes de tentar criar
-    const municipality = await this.prisma.municipality.findUnique({
-      where: { id: dto.municipalityId }
+    // Verifica se a ORGANIZAÇÃO existe (não município)
+    const org = await this.prisma.organization.findUnique({
+      where: { id: dto.organizationId }
     });
 
-    if (!municipality) {
-      // Se não existir, lança um erro claro para o frontend
-      throw new BadRequestException('Município não encontrado. Verifique o ID.');
+    if (!org) {
+      throw new BadRequestException('Organização não encontrada.');
     }
 
     return this.prisma.project.create({
       data: {
         name: dto.name,
         description: dto.description,
-        municipalityId: dto.municipalityId,
+        organizationId: dto.organizationId, // <--- Salva corretamente
         isActive: dto.isActive,
         totalDays: dto.totalDays,
-        // CONVERSÃO DE DATA IMPORTANTE:
+        // Garante que são datas válidas
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
       },
     });
   }
 
-  findAll(filters?: { municipalityId?: string; isActive?: boolean }) {
-    return this.prisma.project.findMany({ 
+  // ... (o restante dos métodos update, findAll mantidos iguais, só atente para trocar municipalityId por organizationId se houver)
+  
+  findAll(filters?: { organizationId?: string; isActive?: boolean }) {
+    return this.prisma.project.findMany({
       where: { ...filters },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: { organization: true }
     });
   }
-
-  findOne(id: string) {
+  
+  // ... métodos findOne e remove ...
+  async findOne(id: string) {
     return this.prisma.project.findUnique({ where: { id } });
   }
 
-  update(id: string, dto: UpdateProjectDto) {
-    const data: any = { ...dto };
-    if (dto.startDate) data.startDate = new Date(dto.startDate);
-    if (dto.endDate) data.endDate = new Date(dto.endDate);
+  async update(id: string, dto: UpdateProjectDto) {
+      const { startDate, endDate, ...rest } = dto;
+      const data: any = { ...rest };
+      
+      if (startDate) data.startDate = new Date(startDate);
+      if (endDate) data.endDate = new Date(endDate);
 
-    return this.prisma.project.update({ where: { id }, data });
+      return this.prisma.project.update({ where: { id }, data });
   }
 
   async remove(id: string) {
-    return this.prisma.project.delete({ where: { id } });
+      return this.prisma.project.delete({ where: { id } });
   }
 }

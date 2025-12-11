@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Delete } from '@nestjs/common'; // <--- Adicione Delete aqui
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Delete } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -12,16 +12,17 @@ import { UserRole } from '../../common/enums/role.enum';
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  @Roles(UserRole.ADMIN_PLENO)
+  // AQUI: Mudamos para UserRole.ADMIN
+  @Roles(UserRole.ADMIN) 
   @Post()
   create(@Body() dto: CreateProjectDto) {
     return this.projectsService.create(dto);
   }
 
   @Get()
-  findAll(@Query('municipalityId') municipalityId?: string, @Query('isActive') isActive?: string) {
+  findAll(@Query('organizationId') organizationId?: string, @Query('isActive') isActive?: string) {
     const filters: any = {};
-    if (municipalityId) filters.municipalityId = municipalityId;
+    if (organizationId) filters.organizationId = organizationId;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
     return this.projectsService.findAll(filters);
   }
@@ -31,14 +32,13 @@ export class ProjectsController {
     return this.projectsService.findOne(id);
   }
 
-  @Roles(UserRole.ADMIN_PLENO)
+  @Roles(UserRole.ADMIN)
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
     return this.projectsService.update(id, dto);
   }
 
-  // --- NOVO MÉTODO PARA EXCLUIR ---
-  @Roles(UserRole.ADMIN_PLENO)
+  @Roles(UserRole.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.projectsService.remove(id);
