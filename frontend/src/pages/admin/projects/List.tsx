@@ -8,6 +8,7 @@ export default function AdminProjectsList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
+  // Busca os projetos na API
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects-list'],
     queryFn: async () => {
@@ -16,6 +17,7 @@ export default function AdminProjectsList() {
     },
   });
 
+  // Filtra pelo nome digitado na busca
   const filteredProjects = Array.isArray(projects) 
     ? projects.filter((p: any) => p.name.toLowerCase().includes(search.toLowerCase()))
     : [];
@@ -85,6 +87,7 @@ export default function AdminProjectsList() {
               </div>
             </div>
 
+            {/* Botão para ir ao Quadro de Tarefas */}
             <button 
               onClick={() => navigate(`/dashboard/admin/projects/${project.id}/tasks`)}
               className="w-full mt-auto py-2.5 rounded-lg border border-indigo-200 text-indigo-700 font-medium hover:bg-indigo-50 flex items-center justify-center gap-2 transition-colors"

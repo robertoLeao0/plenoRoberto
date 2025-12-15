@@ -83,6 +83,7 @@ model User {
   id           String    @id @default(uuid())
   name         String
   email        String    @unique
+  cpf          String?  @unique
   password     String    // Padronizado para 'password' para bater com o Controller
   
   // === CAMPO NOVO: AVATAR ===
@@ -95,7 +96,7 @@ model User {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   
-  // Dados de Integração (WhatsApp/ManyChat)
+  // Dados de Integração (WhatsApp)
   phone                 String?   @unique 
   manychatSubscriberId  String?   @unique 
 

@@ -1,13 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcrypt';
-import * as fs from 'fs';    // <--- Importe o FS
-import * as path from 'path'; // <--- Importe o Path
+import * as fs from 'fs';
+import * as path from 'path';
+import * as xlsx from 'xlsx'; // Para ler o Excel
+import { MailerService } from '@nestjs-modules/mailer'; // Para enviar o email
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mailerService: MailerService,
+  ) {}
 
+  // === BUSCAR POR EMAIL ===
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
@@ -15,6 +21,7 @@ export class UsersService {
     });
   }
 
+  // === BUSCAR UM PELO ID ===
   async findOne(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
@@ -22,38 +29,51 @@ export class UsersService {
     });
   }
 
-  async update(id: string, data: { name?: string; avatarUrl?: string; password?: string }) {
+  // === BUSCAR TODOS COM FILTROS ===
+  async findAll(filters?: { organizationId?: string | 'null' }) {
+    const where: any = {};
+
+    if (filters?.organizationId) {
+      if (filters.organizationId === 'null') {
+        where.organizationId = null; // Usuários sem organização
+      } else {
+        where.organizationId = filters.organizationId; // Usuários da organização X
+      }
+    }
+
+    return this.prisma.user.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      include: { organization: true },
+    });
+  }
+
+  // === ATUALIZAR USUÁRIO (COM LOGICA DE AVATAR) ===
+  async update(id: string, data: { name?: string; avatarUrl?: string; password?: string; role?: any }) {
     
-    // === LÓGICA DE LIMPEZA DE IMAGEM ===
-    // Se o usuário está enviando uma NOVA foto (data.avatarUrl existe)...
+    // 1. Se tem avatar novo, apaga o antigo
     if (data.avatarUrl) {
-      // 1. Buscamos o usuário no banco para ver a foto ANTIGA
       const oldUser = await this.findOne(id);
 
-      // 2. Se ele tinha foto antiga e não era nula
       if (oldUser && oldUser.avatarUrl) {
         try {
-          // A URL no banco é tipo: http://localhost:3000/uploads/avatars/avatar-123.jpg
-          // Precisamos pegar só o final: avatar-123.jpg
+          // Extrai o nome do arquivo da URL (ex: avatar-123.jpg)
           const oldFilename = oldUser.avatarUrl.split('/').pop();
+          
+          // Caminho: raiz_projeto/uploads/avatars/arquivo
+          const filePath = path.join(process.cwd(), 'uploads', 'avatars', oldFilename);
 
-          // Montamos o caminho real no computador
-          // Volta duas pastas (../../) para sair de modules/users e chegar na raiz
-          const filePath = path.join(__dirname, '..', '..', '..', 'uploads', 'avatars', oldFilename);
-
-          // 3. Verifica se o arquivo existe e APAGA
           if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath); 
+            fs.unlinkSync(filePath);
             console.log(`🗑️ Imagem antiga deletada: ${oldFilename}`);
           }
         } catch (error) {
-          console.error("Erro ao tentar apagar imagem antiga:", error);
-          // Não paramos o fluxo se der erro ao apagar, apenas logamos
+          console.error("Erro ao apagar imagem antiga:", error);
         }
       }
     }
 
-    // === ATUALIZAÇÃO NO BANCO (Normal) ===
+    // 2. Se tem senha nova, criptografa
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
     }
@@ -61,6 +81,86 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id },
       data: { ...data },
+    });
+  }
+
+  // === IMPORTAR VIA EXCEL ===
+  async importUsers(file: Express.Multer.File, organizationId: string) {
+    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    const logs = { success: 0, errors: [] };
+
+    for (const row of rows as any[]) {
+      try {
+        const email = row['EMAIL']?.trim();
+        const name = row['NOME']?.trim();
+        const cpf = row['CPF']?.toString().replace(/\D/g, '');
+
+        if (!email || !name) continue;
+
+        const exists = await this.prisma.user.findFirst({
+            where: { OR: [{ email }, { cpf: cpf || undefined }] }
+        });
+
+        if (exists) {
+          logs.errors.push(`Já existe: ${email}`);
+          continue;
+        }
+
+        // Gera senha aleatória
+        const accessCode = Math.random().toString(36).slice(-6).toUpperCase();
+        const passwordHash = await bcrypt.hash(accessCode, 10);
+
+        await this.prisma.user.create({
+          data: {
+            name,
+            email,
+            cpf,
+            password: passwordHash,
+            role: 'USUARIO',
+            organizationId: organizationId,
+          },
+        });
+
+        // Envia Email
+        await this.sendWelcomeEmail(email, name, accessCode);
+        logs.success++;
+
+      } catch (error) {
+        logs.errors.push(`Erro no email ${row['EMAIL']}: ${error.message}`);
+      }
+    }
+    return logs;
+  }
+
+  // === AUXILIAR: ENVIAR EMAIL ===
+  private async sendWelcomeEmail(to: string, name: string, code: string) {
+    try {
+      await this.mailerService.sendMail({
+        to,
+        subject: 'Bem-vindo ao Pleno! Seu acesso chegou 🚀',
+        html: `
+          <div style="font-family: Arial, color: #333;">
+            <h2>Olá, ${name}!</h2>
+            <p>Seu cadastro foi realizado.</p>
+            <p>Sua senha de acesso é:</p>
+            <h1 style="color: #2563EB;">${code}</h1>
+            <p>Acesse em: <a href="http://localhost:5173">pleno.sistema</a></p>
+          </div>
+        `,
+      });
+    } catch (e) {
+      console.error('Erro ao enviar email:', e);
+    }
+  }
+
+  // === ADICIONAR EM MASSA NA ORGANIZAÇÃO ===
+  async addUsersToOrganization(organizationId: string, userIds: string[]) {
+    return this.prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { organizationId },
     });
   }
 }

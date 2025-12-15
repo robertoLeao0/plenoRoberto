@@ -1,99 +1,209 @@
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Save, User, Mail, Phone, Building2, FileText, Shield } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../../services/api';
-import { useQueryClient } from '@tanstack/react-query'; // <--- NOVA IMPORTAÇÃO
 
-export default function AdminCreateUser() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('SERVIDOR');
+export default function AdminUserCreate() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient(); // <--- NOVO HOOK
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Busca organizações
+  const { data: organizations } = useQuery({
+    queryKey: ['organizations-list-simple'],
+    queryFn: async () => (await api.get('/organizations')).data,
+  });
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    cpf: '',
+    organizationId: '',
+    role: 'USUARIO'
+  });
+
+  // === MÁSCARAS DE INPUT ===
+  
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
+    // Máscara: (11) 99999-9999
+    value = value.replace(/^(\d{2})(\d)/g, '($1) $2'); 
+    value = value.replace(/(\d)(\d{4})$/, '$1-$2');
+    setFormData({ ...formData, phone: value.slice(0, 15) }); // Limita tamanho
+  };
+
+  const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+    // Máscara: 000.000.000-00
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    setFormData({ ...formData, cpf: value.slice(0, 14) });
+  };
+
+  // ==========================
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      await api.post('/users', {
-        name,
-        email,
-        password,
-        role,
-      });
-      
-      toast.success('Usuário cadastrado com sucesso!'); 
-      
-      // 1. Invalida o cache da lista de usuários para garantir que o novo apareça
-      queryClient.invalidateQueries({ queryKey: ['users-list'] });
-      
-      // 2. REDIRECIONA para a lista, e não para o painel principal
-      navigate('/dashboard/admin/users'); 
+    
+    if (!formData.name || !formData.email || !formData.phone) {
+      return toast.warn('Por favor, preencha Nome, E-mail e Telefone.');
+    }
 
-    } catch (error) {
+    setIsLoading(true);
+    try {
+      // Limpa as máscaras antes de enviar (remove pontos e traços) se o banco pedir limpo
+      // Se o banco aceita formatado, pode enviar direto. Vou enviar limpo para garantir.
+      const payload = {
+        ...formData,
+        // Se quiser salvar limpo no banco, descomente as linhas abaixo:
+        // phone: formData.phone.replace(/\D/g, ''), 
+        // cpf: formData.cpf.replace(/\D/g, ''),
+        organizationId: formData.organizationId || null,
+      };
+
+      await api.post('/users', payload);
+      toast.success('Usuário criado com sucesso!');
+      navigate('/dashboard/admin/users'); 
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        toast.error('E-mail, CPF ou Telefone já cadastrados.');
+      } else {
+        toast.error('Erro ao criar usuário.');
+      }
       console.error(error);
-      toast.error('Erro ao cadastrar. Verifique os dados ou permissões.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Cadastrar Novo Usuário</h1>
+    <div className="p-6 max-w-4xl mx-auto">
       
-      {/* ... (o restante do formulário é o mesmo) ... */}
-      
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Nome Completo</label>
-          <input 
-            className="w-full border rounded px-3 py-2 mt-1"
-            value={name} onChange={e => setName(e.target.value)} required 
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700">E-mail</label>
-          <input 
-            type="email" className="w-full border rounded px-3 py-2 mt-1"
-            value={email} onChange={e => setEmail(e.target.value)} required 
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Senha Inicial</label>
-          <input 
-            type="password" className="w-full border rounded px-3 py-2 mt-1"
-            value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Perfil de Acesso</label>
-          <select 
-            className="w-full border rounded px-3 py-2 mt-1 bg-white"
-            value={role} onChange={e => setRole(e.target.value)}
-          >
-            <option value="SERVIDOR">Servidor (Padrão)</option>
-            <option value="GESTOR_MUNICIPIO">Gestor de Município</option>
-            <option value="ADMIN_PLENO">Admin Pleno</option>
-          </select>
-        </div>
-
-        <button 
-          type="submit" 
-          className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition font-medium"
-        >
-          Criar Usuário
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+          <ArrowLeft size={20} className="text-gray-600" />
         </button>
+        <h1 className="text-2xl font-bold text-gray-800">Novo Usuário</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 space-y-6">
         
-        <button 
-          type="button"
-          onClick={() => navigate('/dashboard/admin/users')} // Ajustado para voltar para a lista
-          className="w-full text-slate-500 py-2 text-sm hover:underline"
-        >
-          Cancelar e Voltar
-        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* NOME */}
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <User className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input 
+                required
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Ex: Roberto Leão"
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* EMAIL */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">E-mail <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input 
+                required
+                type="email"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="usuario@email.com"
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* TELEFONE (COM MÁSCARA) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone / WhatsApp <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input 
+                required
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="(11) 99999-9999"
+                value={formData.phone}
+                onChange={handlePhoneChange} // <--- Usa o formatador aqui
+                maxLength={15}
+              />
+            </div>
+          </div>
+
+          {/* CPF (COM MÁSCARA) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+            <div className="relative">
+              <FileText className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input 
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="000.000.000-00"
+                value={formData.cpf}
+                onChange={handleCPFChange} // <--- Usa o formatador aqui
+                maxLength={14}
+              />
+            </div>
+          </div>
+
+          {/* CARGO */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Perfil de Acesso</label>
+            <div className="relative">
+              <Shield className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <select 
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
+                value={formData.role}
+                onChange={e => setFormData({...formData, role: e.target.value})}
+              >
+                <option value="USUARIO">Usuário Padrão</option>
+                <option value="GESTOR_ORGANIZACAO">Gestor de Organização</option>
+                <option value="ADMIN">Administrador (Pleno)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ORGANIZAÇÃO */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <select 
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
+                value={formData.organizationId}
+                onChange={e => setFormData({...formData, organizationId: e.target.value})}
+              >
+                <option value="">Sem Organização (Livre)</option>
+                {organizations?.map((org: any) => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="pt-4 border-t flex justify-end">
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors disabled:opacity-70"
+          >
+            <Save size={18} />
+            {isLoading ? 'Salvando...' : 'Criar Usuário'}
+          </button>
+        </div>
+
       </form>
     </div>
   );
-} 
+}
