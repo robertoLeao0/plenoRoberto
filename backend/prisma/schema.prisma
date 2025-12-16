@@ -24,8 +24,10 @@ enum Role {
 
 // Tipo da empresa
 enum OrganizationType {
-  SYSTEM    // Organização "Mãe" (Seu time Pleno)
-  CUSTOMER  // Clientes (Prefeituras, Empresas)
+  CUSTOMER
+  PARTNER
+  INTERNAL
+  SYSTEM
 }
 
 // Status de gamificação
@@ -63,29 +65,33 @@ enum TaskLogStatus {
 // ========================================================
 
 model Organization {
-  id          String   @id @default(uuid())
-  name        String   // Ex: "Prefeitura de Cajamar"
-  description String?  // Descrição detalhada
-  location    String?  
-  cnpj        String?  // Para fins fiscais
-  
+  id          String           @id @default(uuid())
+  name        String           // Ex: "Prefeitura de Cajamar"
+  description String?          // Descrição detalhada
+  location    String?       
+  cnpj        String?          // Para fins fiscais
+   
+  // === CONTROLE DE ACESSO (MUDANÇA AQUI) ===
+  // Se estiver null, a organização está ATIVA.
+  // Se tiver uma data, ela foi "excluída" (Soft Delete).
+  deletedAt   DateTime?        
+   
   type        OrganizationType @default(CUSTOMER)
-  active      Boolean          @default(true)
-  
+   
   // === RELACIONAMENTOS ===
-  
-  // 1. Quem é o Gestor/Dono dessa organização (Admin ou Gestor)
+   
+  // 1. Gestor Principal
   managerId   String?
-  manager     User?    @relation("OrgManager", fields: [managerId], references: [id])
+  manager     User?            @relation("OrgManager", fields: [managerId], references: [id])
 
-  // 2. Todos os usuários/funcionários que pertencem a ela
-  users       User[]   
+  // 2. Membros
+  users       User[]           @relation("OrgMembers")
 
-  // 3. Projetos dessa organização
-  projects    Project[] 
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // 3. Projetos
+  projects    Project[]
+   
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@map("organizations")
 }
@@ -108,11 +114,11 @@ model User {
   // === PERMISSÕES E VÍNCULOS ===
   role           Role      @default(USUARIO)
 
-  // O usuário é membro de UMA organização
+  // 1. Membro de uma organização (Relação "OrgMembers")
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organization   Organization? @relation("OrgMembers", fields: [organizationId], references: [id])
 
-  // O usuário pode ser GESTOR de várias organizações (Relação inversa)
+  // 2. Gestor de várias organizações (Relação "OrgManager")
   managedOrganizations Organization[] @relation("OrgManager")
 
   // === INTEGRAÇÕES ===
@@ -128,7 +134,7 @@ model User {
   tasksCreated     Task[]            @relation("TaskCreator")
 
   // === CONTROLE ===
-  deletedAt      DateTime? // Soft Delete (não apaga do banco, só esconde)
+  deletedAt      DateTime? // Soft Delete
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -140,35 +146,39 @@ model User {
 // ========================================================
 
 model Project {
-  id           String    @id @default(uuid())
-  name         String
-  description  String?
-  
-  startDate    DateTime?      
-  endDate      DateTime?
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+   
+  startDate   DateTime?       
+  endDate     DateTime?
 
-  // Pertence a qual organização?
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  // === CONTROLE DE ACESSO (MUDANÇA AQUI) ===
+  // Substitui o "isActive". 
+  // Para buscar projetos ativos use: where: { deletedAt: null }
+  deletedAt   DateTime?        
   
-  isActive       Boolean       @default(true)
-  
-  // === CONTEÚDO DO PROJETO ===
-  tasks          Task[]         // Mensagens/Tarefas
-  subscribers    Subscription[] // Pessoas inscritas
-  
-  // === GAMIFICAÇÃO (LEGADO/ATIVO) ===
-  totalDays      Int            @default(21)
+  // Relação Muitos-para-Muitos com Organizações
+  organizations  Organization[] 
+   
+  // Mantido com valor padrão
+  totalDays      Int             @default(30)
+
+  // === CONTEÚDO E RELAÇÕES ===
+  tasks          Task[]           
+  subscribers    Subscription[]   
+   
+  // === GAMIFICAÇÃO ===
   dayTemplates   DayTemplate[]
   actionLogs     ActionLog[]
   ranking        RankingSummary[]
-  
+   
   // === INTEGRAÇÕES ===
   integrations   IntegrationSetting[]
   manychatConn   ManychatConnection[]
-  
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+   
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@map("projects")
 }

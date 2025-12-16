@@ -22,6 +22,12 @@ export default function AdminProjectsList() {
     ? projects.filter((p: any) => p.name.toLowerCase().includes(search.toLowerCase()))
     : [];
 
+  // Helper para formatar data com segurança
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
   if (isLoading) return <div className="p-8 text-center text-slate-500">Carregando projetos...</div>;
 
   return (
@@ -68,37 +74,52 @@ export default function AdminProjectsList() {
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-800 mb-1 line-clamp-1" title={project.name}>
+              <h3 className="text-lg font-bold text-slate-800 mb-2 line-clamp-1" title={project.name}>
                 {project.name}
               </h3>
               
-              <p className="text-sm text-indigo-600 font-medium mb-3">
-                {project.organization?.name || 'Sem organização'}
-              </p>
+              {/* 👇 CORREÇÃO AQUI: Exibindo Lista de Organizações (Array) 👇 */}
+              <div className="mb-4">
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Organizações</p>
+                <div className="flex flex-wrap gap-2">
+                  {project.organizations && project.organizations.length > 0 ? (
+                    project.organizations.map((org: any) => (
+                      <span key={org.id} className="text-xs font-medium bg-indigo-50 text-indigo-600 px-2 py-1 rounded border border-indigo-100">
+                        {org.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Nenhuma vinculada</span>
+                  )}
+                </div>
+              </div>
 
-              <div className="text-xs text-slate-500 space-y-1 mb-4">
+              <div className="text-xs text-slate-500 space-y-2 mb-4">
                 <div className="flex items-center gap-2">
-                  <FaCalendarAlt /> 
-                  {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
+                  <FaCalendarAlt className="text-slate-400" /> 
+                  <span>{formatDate(project.startDate)} - {formatDate(project.endDate)}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <FaTasks /> {project._count?.tasks ?? 0} Tarefas
-                </div>
+                {/* Se o backend mandar a contagem de tarefas, exibe aqui */}
+                {project._count?.tasks !== undefined && (
+                    <div className="flex items-center gap-2">
+                        <FaTasks className="text-slate-400" /> {project._count.tasks} Tarefas
+                    </div>
+                )}
               </div>
             </div>
 
-            {/* Botão para ir ao Quadro de Tarefas */}
+            {/* Botão para ir aos Detalhes */}
             <button 
-              onClick={() => navigate(`/dashboard/admin/projects/${project.id}/tasks`)}
+              onClick={() => navigate(`/dashboard/admin/projects/${project.id}`)}
               className="w-full mt-auto py-2.5 rounded-lg border border-indigo-200 text-indigo-700 font-medium hover:bg-indigo-50 flex items-center justify-center gap-2 transition-colors"
             >
-              <FaTasks /> Gerenciar Tarefas
+              <FaTasks /> Ver Detalhes
             </button>
           </div>
         ))}
 
         {filteredProjects.length === 0 && (
-          <div className="col-span-full text-center py-12 text-slate-400">
+          <div className="col-span-full text-center py-12 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
             Nenhum projeto encontrado.
           </div>
         )}

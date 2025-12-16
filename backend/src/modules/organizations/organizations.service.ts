@@ -1,112 +1,111 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { CreateOrganizationDto } from './dto/create-organization.dto';
-import { Role } from '@prisma/client';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  // === 1. CRIAR ORGANIZAÇÃO ===
-  async create(data: CreateOrganizationDto) {
-    return this.prisma.organization.create({
-      data: {
-        name: data.name,
-        cnpj: data.cnpj,
-        description: data.description,
-        location: data.location,
-        type: data.type || 'CUSTOMER',
-        active: true,
-        managerId: data.managerId || null, 
-      },
-    });
-  }
-
-  // === 2. LISTAR (COM FILTRO DE PERMISSÃO) ===
-  async findAll(currentUser: any) {
-    const includeConfig = {
-      manager: { select: { id: true, name: true, email: true } },
-      _count: { select: { users: true, projects: true } },
-    };
-
-    // A. Se for ADMIN, vê tudo
-    if (currentUser.role === Role.ADMIN) {
-      return this.prisma.organization.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: includeConfig,
-      });
-    }
-
-    // B. Se for GESTOR ou USUARIO, vê apenas a sua própria organização
-    if (!currentUser.organizationId) {
-      return []; // Se não tiver org vinculada, retorna vazio
-    }
+  // 1. LISTAR (Com filtro Ativo/Inativo)
+  async findAll(active?: boolean) {
+    const whereClause = active !== undefined ? { active } : {};
 
     return this.prisma.organization.findMany({
-      where: {
-        id: currentUser.organizationId,
+      where: whereClause,
+      include: {
+        _count: { select: { users: true } }, // Conta membros (relação "users")
+        manager: {                           // Traz o Gestor (relação "manager")
+          select: { name: true, avatarUrl: true } 
+        } 
       },
-      include: includeConfig,
+      orderBy: { name: 'asc' },
     });
   }
 
-  // === 3. DETALHES (COM STATUS DA TAREFA DE HOJE) ===
+  // 2. DETALHES DA ORGANIZAÇÃO
   async findOne(id: string) {
-    // Definir intervalo de HOJE para buscar os logs
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
     const organization = await this.prisma.organization.findUnique({
       where: { id },
       include: {
-        // Traz dados do Gestor
-        manager: {
-          select: { id: true, name: true, email: true, avatarUrl: true }
-        },
-        // Traz Usuários com Telefone e Log de Hoje
-        users: {
+        manager: true, // Inclui dados do gestor
+        users: {       // Inclui lista de membros
           orderBy: { name: 'asc' },
-          select: { 
-            id: true, 
-            name: true, 
-            email: true, 
-            role: true, 
-            avatarUrl: true, 
-            phone: true,
-            // Busca se existe um ActionLog criado hoje para este usuário
-            actionLogs: {
-              where: {
-                createdAt: { gte: startOfDay, lte: endOfDay }
-              },
-              select: { status: true, pointsAwarded: true },
-              take: 1
-            }
+          select: {
+            id: true, name: true, email: true, role: true, phone: true, avatarUrl: true
           }
         }
-      }
+      },
     });
 
-    if (!organization) return null;
+    if (!organization) throw new NotFoundException('Organização não encontrada');
+    return organization;
+  }
 
-    // Processa os usuários para facilitar o uso no Frontend
-    // Transforma o array 'actionLogs' em campos simples 'todayStatus' e 'todayPoints'
-    const formattedUsers = organization.users.map(user => {
-      const dailyLog = user.actionLogs[0]; // Pega o primeiro log (se houver)
+  // 3. CRIAR
+  async create(data: any) {
+    return this.prisma.organization.create({ data });
+  }
 
-      return {
-        ...user,
-        todayStatus: dailyLog ? dailyLog.status : 'NAO_REALIZADO',
-        todayPoints: dailyLog ? dailyLog.pointsAwarded : 0,
-        actionLogs: undefined // Remove o array bruto para limpar o retorno
-      };
+  // 4. ATUALIZAR (Dados ou Status Ativo/Inativo)
+  async update(id: string, data: any) {
+    return this.prisma.organization.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // === MÉTODOS DE GESTÃO DE PESSOAS ===
+
+  // 5. ADICIONAR MEMBRO (Vincula User -> Organization)
+  async addMember(organizationId: string, email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    
+    if (!user) {
+      throw new NotFoundException('E-mail não encontrado no sistema.');
+    }
+
+    if (user.organizationId === organizationId) {
+      throw new BadRequestException('Usuário já pertence a esta organização.');
+    }
+
+    // Atualiza o usuário colocando o ID da organização nele
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: { organizationId },
+    });
+  }
+
+  // 6. DEFINIR GESTOR
+  async defineManager(organizationId: string, userId: string) {
+    // Passo A: Garantir que o usuário existe e faz parte da organização
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuário não encontrado.');
+
+    // Passo B: Atualizar a Organização para apontar este managerId
+    await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { managerId: userId }
     });
 
-    return {
-      ...organization,
-      users: formattedUsers
-    };
+    // Passo C: Atualizar o Cargo do usuário para GESTOR_ORGANIZACAO (caso não seja Admin)
+    if (user.role !== 'ADMIN') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { role: 'GESTOR_ORGANIZACAO' }
+      });
+    }
+
+    return { message: 'Gestor definido com sucesso' };
+  }
+
+  // 7. REMOVER MEMBRO
+  async removeMember(userId: string) {
+    // Remove o vínculo da organização e volta o cargo para USUARIO
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { 
+        organizationId: null, 
+        role: 'USUARIO' 
+      },
+    });
   }
 }

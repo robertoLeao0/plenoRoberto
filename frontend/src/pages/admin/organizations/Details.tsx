@@ -1,217 +1,218 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  ArrowLeft, 
-  Building2, 
-  Mail, 
-  Phone, 
-  UserCheck, 
-  CheckCircle, 
-  Clock, 
-  XCircle, 
-  UserPlus 
+  ArrowLeft, Mail, Phone, User, ShieldCheck, 
+  Settings, Trash2, Crown, Plus
 } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'react-toastify';
 import api from '../../../services/api';
-
-interface OrganizationDetails {
-  id: string;
-  name: string;
-  description?: string;
-  location?: string;
-  cnpj?: string;
-  active: boolean;
-  manager?: {
-    id: string;
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  };
-  users: Array<{
-    id: string;
-    name: string;
-    email: string;
-    phone?: string;
-    role: string;
-    avatarUrl?: string;
-    todayStatus?: 'CONCLUIDO' | 'PENDENTE' | 'NAO_REALIZADO';
-    todayPoints?: number;
-  }>;
-}
 
 export default function OrganizationDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  
+  // Estado para abrir/fechar o modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
 
-  // Buscar dados da Organização + Usuários + Status do Dia
-  const { data: org, isLoading } = useQuery<OrganizationDetails>({
-    queryKey: ['organization-details', id],
+  // 1. BUSCAR DADOS
+  const { data: org, isLoading } = useQuery({
+    queryKey: ['organization', id],
     queryFn: async () => {
-      const response = await api.get(`/organizations/${id}`);
-      return response.data;
+      const res = await api.get(`/organizations/${id}`);
+      return res.data;
     },
-    enabled: !!id,
   });
 
-  if (isLoading) return <div className="p-10 text-center text-gray-500">Carregando detalhes...</div>;
-  if (!org) return <div className="p-10 text-center text-red-500">Organização não encontrada.</div>;
+  // 2. MUTATION: ADICIONAR
+  const addMemberMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return api.post(`/organizations/${id}/members`, { email });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization', id] });
+      toast.success('Membro adicionado!');
+      setIsModalOpen(false);
+      setNewMemberEmail('');
+    },
+    onError: () => toast.error('Erro ao adicionar membro. Verifique o e-mail.')
+  });
+
+  // 3. MUTATION: PROMOVER GESTOR
+  const promoteManagerMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return api.patch(`/organizations/${id}/manager`, { userId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization', id] });
+      toast.success('Gestor atualizado!');
+    },
+  });
+
+  // 4. MUTATION: REMOVER
+  const removeMemberMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return api.delete(`/organizations/members/${userId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization', id] });
+      toast.success('Membro removido.');
+    },
+  });
+
+  if (isLoading) return <div className="p-8">Carregando...</div>;
+  if (!org) return <div className="p-8">Organização não encontrada.</div>;
+
+  const gestorAtual = org.members?.find((m: any) => m.role === 'GESTOR_ORGANIZACAO');
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
       
-      {/* HEADER COM VOLTAR E INFO PRINCIPAL */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      {/* HEADER VOLTAR */}
+      <button 
+        onClick={() => navigate(-1)} 
+        className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+      >
+        <ArrowLeft size={20} className="mr-2" />
+        Voltar para Organizações
+      </button>
+
+      {/* HEADER INFO */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+        <div className="flex justify-between items-start">
+            <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                    <BuildingIcon />
+                </div>
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800">{org.name}</h1>
+                    <p className="text-gray-400 text-sm">Matriz do Sistema • {org.location || 'Local não definido'}</p>
+                </div>
+            </div>
+            <span className={`px-3 py-1 text-xs font-bold rounded-full ${org.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {org.active ? 'Ativa' : 'Inativa'}
+            </span>
+        </div>
+
+        {/* BOX GESTOR */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-4">
+            <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-blue-500 shadow-sm">
+                <User size={20} />
+            </div>
+            <div>
+                <p className="text-xs font-bold text-blue-400 uppercase tracking-wide">Gestor Responsável</p>
+                {gestorAtual ? (
+                    <p className="text-gray-800 font-medium">{gestorAtual.name}</p>
+                ) : (
+                    <p className="text-gray-400 italic">Nenhum gestor definido</p>
+                )}
+            </div>
+        </div>
+      </div>
+
+      {/* LISTA DE MEMBROS */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">Membros e Acompanhamento</h2>
+            <p className="text-sm text-gray-400">Gerencie quem tem acesso a esta organização.</p>
+          </div>
+          
+          {/* 👇 AQUI ESTÁ O BOTÃO QUE VOCÊ QUERIA 👇 */}
           <button 
-            onClick={() => navigate(-1)} 
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            <ArrowLeft size={20} className="text-gray-600" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Building2 className="text-blue-600" />
-              {org.name}
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {org.description || 'Sem descrição'} • {org.location || 'Local não definido'}
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${org.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-               {org.active ? 'Ativa' : 'Inativa'}
-           </span>
-        </div>
-      </div>
-
-      {/* CARD DO GESTOR RESPONSÁVEL */}
-      <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center gap-4">
-        <div className="bg-white p-2 rounded-full text-blue-600 shadow-sm">
-           <UserCheck size={24} />
-        </div>
-        <div>
-           <p className="text-xs font-bold text-blue-800 uppercase tracking-wide">Gestor Responsável</p>
-           <p className="text-gray-800 font-medium">
-             {org.manager ? org.manager.name : 'Nenhum gestor definido'}
-           </p>
-           {org.manager && <p className="text-xs text-blue-600">{org.manager.email}</p>}
-        </div>
-      </div>
-
-      {/* SEÇÃO DE MEMBROS (TABELA) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        
-        {/* Header da Tabela */}
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800">Membros e Acompanhamento</h2>
-            <p className="text-sm text-gray-500">Status das tarefas de hoje.</p>
-          </div>
-          <button className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
-            <UserPlus size={16} />
+            <Settings size={16} />
             Gerenciar
           </button>
         </div>
 
-        {/* Tabela */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contato</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status Tarefa (Hoje)</th>
+        <table className="w-full text-left text-sm text-gray-600">
+          <tbody className="divide-y divide-gray-100">
+            {org.members?.map((member: any) => (
+              <tr key={member.id} className="hover:bg-gray-50 group">
+                <td className="px-6 py-4">
+                   <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-xs">
+                        {member.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">{member.name}</p>
+                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                            {member.role}
+                        </span>
+                      </div>
+                   </div>
+                </td>
+                <td className="px-6 py-4">
+                   <p className="flex items-center gap-2"><Mail size={12}/> {member.email}</p>
+                   <p className="flex items-center gap-2 text-gray-400"><Phone size={12}/> {member.phone || '-'}</p>
+                </td>
+                <td className="px-6 py-4 text-right">
+                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {member.role !== 'GESTOR_ORGANIZACAO' && (
+                        <button title="Tornar Gestor" onClick={() => promoteManagerMutation.mutate(member.id)} className="p-2 text-purple-600 hover:bg-purple-50 rounded"><Crown size={16}/></button>
+                      )}
+                      <button title="Remover" onClick={() => removeMemberMutation.mutate(member.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                   </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {org.users.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-6 py-10 text-center text-gray-500">
-                    Nenhum usuário vinculado a esta organização.
-                  </td>
-                </tr>
-              ) : (
-                org.users.map((user) => (
-                  <tr 
-                    key={user.id} 
-                    // AQUI ESTÃO AS MUDANÇAS: cursor-pointer e onClick
-                    className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                    onClick={() => navigate(`/dashboard/admin/organizations/${org.id}/users/${user.id}`)}
-                  >
-                    
-                    {/* COLUNA 1: NOME E AVATAR */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-xs overflow-hidden group-hover:ring-2 group-hover:ring-blue-100 transition-all">
-                          {user.avatarUrl ? (
-                            <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            user.name.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{user.name}</p>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                            user.role === 'GESTOR_ORGANIZACAO' 
-                              ? 'bg-purple-50 text-purple-700 border-purple-100' 
-                              : 'bg-gray-50 text-gray-600 border-gray-100'
-                          }`}>
-                            {user.role === 'GESTOR_ORGANIZACAO' ? 'Gestor' : 'Usuário'}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* COLUNA 2: CONTATO */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500 space-y-1">
-                        <div className="flex items-center gap-2">
-                           <Mail size={14} className="text-gray-400"/> {user.email}
-                        </div>
-                        <div className="flex items-center gap-2">
-                           <Phone size={14} className="text-gray-400"/> {user.phone || '-'}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* COLUNA 3: STATUS (BADGES) */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {(() => {
-                        switch (user.todayStatus) {
-                          case 'CONCLUIDO':
-                            return (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                                <CheckCircle size={12} className="mr-1.5" />
-                                Aprovado (+{user.todayPoints || 0}pts)
-                              </span>
-                            );
-                          case 'PENDENTE':
-                            return (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
-                                <Clock size={12} className="mr-1.5" />
-                                Pendente Aprovação
-                              </span>
-                            );
-                          case 'NAO_REALIZADO':
-                          default:
-                            return (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                                <XCircle size={12} className="mr-1.5" />
-                                Não Realizado
-                              </span>
-                            );
-                        }
-                      })()}
-                    </td>
-
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
+
+      {/* === MODAL DE ADICIONAR === */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl transform transition-all">
+             <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Adicionar Membro</h2>
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+             </div>
+             
+             <p className="text-sm text-gray-500 mb-4">
+               Digite o e-mail de um usuário já cadastrado no sistema para vinculá-lo aqui.
+             </p>
+             
+             <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">E-mail do Usuário</label>
+                    <input 
+                    type="email" 
+                    placeholder="ex: roberto@pleno.com"
+                    className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    value={newMemberEmail}
+                    onChange={(e) => setNewMemberEmail(e.target.value)}
+                    autoFocus
+                    />
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6">
+                    <button 
+                        onClick={() => setIsModalOpen(false)}
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={() => addMemberMutation.mutate(newMemberEmail)}
+                        disabled={addMemberMutation.isPending}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {addMemberMutation.isPending ? 'Adicionando...' : <><Plus size={18}/> Adicionar</>}
+                    </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Pequeno helper para o ícone
+function BuildingIcon() { return <ShieldCheck size={24} />; }
