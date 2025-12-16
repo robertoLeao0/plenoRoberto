@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
@@ -13,7 +13,46 @@ export class UsersService {
     private mailerService: MailerService,
   ) {}
 
-  // === BUSCAR POR EMAIL ===
+  // === 1. CRIAR USUÁRIO MANUALMENTE ===
+  async create(data: any) {
+    // Verifica duplicidade
+    const userExists = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: data.email }, { cpf: data.cpf }],
+      },
+    });
+
+    if (userExists) {
+      throw new BadRequestException('Usuário já existe (E-mail ou CPF).');
+    }
+
+    // Gera uma senha aleatória se não for enviada, ou usa padrão '123456'
+    // Aqui estou gerando uma aleatória para enviar por e-mail, igual na importação
+    const plainPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    // Trata organizationId vazio
+    const orgId = data.organizationId === '' ? null : data.organizationId;
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        cpf: data.cpf,
+        role: data.role || 'USUARIO',
+        organizationId: orgId,
+        password: hashedPassword,
+      },
+    });
+
+    // Envia o e-mail de boas-vindas
+    await this.sendWelcomeEmail(user.email, user.name, plainPassword);
+
+    return user;
+  }
+
+  // === 2. BUSCAR POR EMAIL ===
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
@@ -21,7 +60,7 @@ export class UsersService {
     });
   }
 
-  // === BUSCAR UM PELO ID ===
+  // === 3. BUSCAR UM PELO ID ===
   async findOne(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
@@ -29,7 +68,7 @@ export class UsersService {
     });
   }
 
-  // === BUSCAR TODOS COM FILTROS ===
+  // === 4. BUSCAR TODOS COM FILTROS ===
   async findAll(filters?: { organizationId?: string | 'null' }) {
     const where: any = {};
 
@@ -48,10 +87,21 @@ export class UsersService {
     });
   }
 
-  // === ATUALIZAR USUÁRIO (COM LOGICA DE AVATAR) ===
+  // === 5. BUSCAR POTENCIAIS GESTORES (Para o Dropdown de Org) ===
+  async findPotentialManagers() {
+    return this.prisma.user.findMany({
+      where: {
+        role: { in: ['ADMIN', 'GESTOR_ORGANIZACAO'] }, // Apenas Admins e Gestores
+      },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  // === 6. ATUALIZAR USUÁRIO (COM LOGICA DE AVATAR) ===
   async update(id: string, data: { name?: string; avatarUrl?: string; password?: string; role?: any }) {
     
-    // 1. Se tem avatar novo, apaga o antigo
+    // Se tem avatar novo, apaga o antigo do disco
     if (data.avatarUrl) {
       const oldUser = await this.findOne(id);
 
@@ -60,12 +110,12 @@ export class UsersService {
           // Extrai o nome do arquivo da URL (ex: avatar-123.jpg)
           const oldFilename = oldUser.avatarUrl.split('/').pop();
           
-          // Caminho: raiz_projeto/uploads/avatars/arquivo
-          const filePath = path.join(process.cwd(), 'uploads', 'avatars', oldFilename);
-
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`🗑️ Imagem antiga deletada: ${oldFilename}`);
+          if (oldFilename) {
+             const filePath = path.join(process.cwd(), 'uploads', 'avatars', oldFilename);
+             if (fs.existsSync(filePath)) {
+               fs.unlinkSync(filePath);
+               console.log(`🗑️ Imagem antiga deletada: ${oldFilename}`);
+             }
           }
         } catch (error) {
           console.error("Erro ao apagar imagem antiga:", error);
@@ -73,7 +123,7 @@ export class UsersService {
       }
     }
 
-    // 2. Se tem senha nova, criptografa
+    // Se tem senha nova, criptografa
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
     }
@@ -84,7 +134,7 @@ export class UsersService {
     });
   }
 
-  // === IMPORTAR VIA EXCEL ===
+  // === 7. IMPORTAR VIA EXCEL ===
   async importUsers(file: Express.Multer.File, organizationId: string) {
     const workbook = xlsx.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -96,6 +146,7 @@ export class UsersService {
       try {
         const email = row['EMAIL']?.trim();
         const name = row['NOME']?.trim();
+        const phone = row['TELEFONE']?.toString(); // Adicionado leitura de telefone
         const cpf = row['CPF']?.toString().replace(/\D/g, '');
 
         if (!email || !name) continue;
@@ -118,9 +169,10 @@ export class UsersService {
             name,
             email,
             cpf,
+            phone,
             password: passwordHash,
             role: 'USUARIO',
-            organizationId: organizationId,
+            organizationId: organizationId || null,
           },
         });
 
@@ -135,7 +187,7 @@ export class UsersService {
     return logs;
   }
 
-  // === AUXILIAR: ENVIAR EMAIL ===
+  // === 8. AUXILIAR: ENVIAR EMAIL ===
   private async sendWelcomeEmail(to: string, name: string, code: string) {
     try {
       await this.mailerService.sendMail({
@@ -156,7 +208,7 @@ export class UsersService {
     }
   }
 
-  // === ADICIONAR EM MASSA NA ORGANIZAÇÃO ===
+  // === 9. ADICIONAR EM MASSA NA ORGANIZAÇÃO ===
   async addUsersToOrganization(organizationId: string, userIds: string[]) {
     return this.prisma.user.updateMany({
       where: { id: { in: userIds } },

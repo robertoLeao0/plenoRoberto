@@ -114,7 +114,7 @@ export default function AdminUsersList() {
             onChange={(e) => setOrgFilter(e.target.value)}
           >
             <option value="">Todas Organizações</option>
-            <option value="null">⚡ Sem Organização</option>
+            <option value="null">Sem Organização</option>
             {organizations?.map((org: any) => (
               <option key={org.id} value={org.id}>{org.name}</option>
             ))}

@@ -1,5 +1,4 @@
-// src/modules/organizations/dto/create-organization.dto.ts
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsUUID } from 'class-validator';
 import { OrganizationType } from '@prisma/client';
 
 export class CreateOrganizationDto {
@@ -22,4 +21,9 @@ export class CreateOrganizationDto {
   @IsEnum(OrganizationType)
   @IsOptional()
   type?: OrganizationType;
+
+  // ID do Gestor (Opcional, pois pode ser adicionado depois)
+  @IsOptional()
+  @IsUUID()
+  managerId?: string;
 }

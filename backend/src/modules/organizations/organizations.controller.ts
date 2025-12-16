@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Req, Param } from '@nestjs/common'; // <--- Adicione Param
+import { Controller, Get, Post, Body, UseGuards, Req, Param } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -15,10 +15,10 @@ export class OrganizationsController {
 
   @Get()
   findAll(@Req() req) {
+    // Passamos o usuário logado para o Service aplicar o filtro (Admin vs Gestor)
     return this.organizationsService.findAll(req.user);
   }
 
-  // === ADICIONE ISTO AQUI ===
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.organizationsService.findOne(id);

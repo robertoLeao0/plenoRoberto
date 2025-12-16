@@ -22,14 +22,28 @@ const storageConfig = diskStorage({
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // 1. LISTAR COM FILTROS (GET /users?organizationId=...)
+  // 1. CRIAR USUÁRIO MANUALMENTE (Novo)
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  create(@Body() body: any) {
+    return this.usersService.create(body);
+  }
+
+  // 2. LISTAR COM FILTROS (GET /users?organizationId=...)
   @UseGuards(JwtAuthGuard)
   @Get()
   findAll(@Query('organizationId') organizationId?: string) {
     return this.usersService.findAll({ organizationId });
   }
 
-  // 2. ATUALIZAR PERFIL + UPLOAD DE FOTO
+  // 3. LISTAR GESTORES (Para dropdown de Organização) (Novo)
+  @UseGuards(JwtAuthGuard)
+  @Get('managers')
+  findManagers() {
+    return this.usersService.findPotentialManagers();
+  }
+
+  // 4. ATUALIZAR PERFIL + UPLOAD DE FOTO
   @UseGuards(JwtAuthGuard)
   @Put('profile')
   @UseInterceptors(FileInterceptor('avatar', { storage: storageConfig }))
@@ -51,16 +65,15 @@ export class UsersController {
     return this.usersService.update(userId, updateData);
   }
 
-  // 3. IMPORTAR EXCEL (Usa memória, não disco)
+  // 5. IMPORTAR EXCEL
   @Post('import')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file')) // Sem storageConfig = salva na memória (buffer)
+  @UseInterceptors(FileInterceptor('file'))
   async importUsers(
     @UploadedFile() file: Express.Multer.File,
     @Body('organizationId') organizationId: string,
     @Req() req,
   ) {
-    // Se for Gestor, força o ID dele. Se for Admin, usa o que enviou.
     const orgId = req.user.role === 'GESTOR_ORGANIZACAO' 
       ? req.user.organizationId 
       : organizationId;
@@ -68,7 +81,7 @@ export class UsersController {
     return this.usersService.importUsers(file, orgId);
   }
 
-  // 4. ADICIONAR EM MASSA
+  // 6. ADICIONAR EM MASSA
   @UseGuards(JwtAuthGuard)
   @Patch('add-to-organization')
   async addMembers(@Body() body: { organizationId: string; userIds: string[] }) {

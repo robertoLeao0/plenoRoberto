@@ -16,6 +16,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { TaskModule } from './tasks/task.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     TaskModule,
     IntegrationsModule,
     OrganizationsModule,
+    DashboardModule,
   ],
   providers: [PrismaService],
 })
