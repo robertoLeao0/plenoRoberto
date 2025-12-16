@@ -21,6 +21,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  // Garante que os tipos batem com o que vem do Banco/Login
   role: 'ADMIN' | 'GESTOR_ORGANIZACAO' | 'USUARIO';
   avatarUrl?: string | null;
   organization?: {
@@ -38,13 +39,13 @@ interface MenuItem {
   label: string;
   path: string;
   icon: React.ElementType;
-  exact?: boolean; // <--- NOVA PROPRIEDADE: Define se a rota deve ser exata
+  exact?: boolean; // Define se a rota deve ser exata para o botão ficar azul
 }
 
 // === DEFINIÇÃO DOS MENUS ===
+// As chaves aqui (ADMIN, GESTOR_ORGANIZACAO, USUARIO) devem ser idênticas ao banco de dados
 const MENUS: Record<string, MenuItem[]> = {
   ADMIN: [
-    // exact: true impede que o Painel fique ativo ao entrar em outras telas
     { label: 'Painel Principal', path: '/dashboard/admin', icon: LayoutDashboard, exact: true },
     { label: 'Organizações', path: '/dashboard/admin/organizations', icon: Building2 },
     { label: 'Usuários', path: '/dashboard/admin/users', icon: Users },
@@ -57,10 +58,10 @@ const MENUS: Record<string, MenuItem[]> = {
     { label: 'Minha Equipe', path: '/dashboard/gestor/equipe', icon: Users },
   ],
   USUARIO: [
-    { label: 'Minha Jornada', path: '/dashboard/servidor', icon: LayoutDashboard, exact: true },
-    { label: 'Tarefas', path: '/dashboard/servidor/tarefas', icon: CheckSquare },
-    { label: 'Ranking', path: '/dashboard/servidor/ranking', icon: Trophy },
-    { label: 'Suporte', path: '/dashboard/servidor/support', icon: LifeBuoy },
+    { label: 'Minha Jornada', path: '/dashboard/user', icon: LayoutDashboard, exact: true },
+    { label: 'Tarefas', path: '/dashboard/user/tarefas', icon: CheckSquare },
+    { label: 'Ranking', path: '/dashboard/user/ranking', icon: Trophy },
+    { label: 'Suporte', path: '/dashboard/user/support', icon: LifeBuoy },
   ]
 };
 
@@ -69,18 +70,20 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Seleciona o menu com base no cargo do usuário logado
   const currentMenu = MENUS[user.role] || [];
 
   const handleLogout = () => {
+    // Limpa dados de autenticação
     localStorage.removeItem('token'); 
-    localStorage.removeItem('user');
+    localStorage.removeItem('user'); // Se você salva o user também
     navigate('/login');
   };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       
-      {/* === SIDEBAR === */}
+      {/* === SIDEBAR (Barra Lateral) === */}
       <aside 
         className={`
           ${isSidebarOpen ? 'w-64' : 'w-20'} 
@@ -91,23 +94,21 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
         {/* LOGO */}
         <div className="h-16 flex items-center justify-between px-6 bg-[#1f2937] border-b border-gray-700 shrink-0">
           {isSidebarOpen ? (
-            <span className="text-xl font-bold tracking-wider">PLENO</span>
+            <span className="text-xl font-bold tracking-wider text-white">PLENO</span>
           ) : (
-            <span className="text-xl font-bold">P</span>
+            <span className="text-xl font-bold text-white">P</span>
           )}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden text-gray-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
 
-        {/* NAVEGAÇÃO */}
+        {/* NAVEGAÇÃO (Lista de Menus) */}
         <nav className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-gray-700">
           <ul className="space-y-1 px-3">
             {currentMenu.map((item) => {
               
-              // === LÓGICA CORRIGIDA ===
-              // Se tiver 'exact: true', compara igualdade exata (para o Painel Principal).
-              // Se não, verifica se começa com o path (para Usuários, Projetos e suas sub-telas).
+              // Verifica se o item atual está ativo
               const isActive = item.exact 
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path);
@@ -127,6 +128,7 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
                         <item.icon size={20} />
                     </div>
                     
+                    {/* Só mostra o texto se a sidebar estiver aberta */}
                     {isSidebarOpen && (
                         <span className="text-sm font-medium truncate">{item.label}</span>
                     )}
@@ -137,7 +139,7 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
           </ul>
         </nav>
 
-        {/* RODAPÉ */}
+        {/* RODAPÉ DA SIDEBAR (Config e Sair) */}
         <div className="p-3 border-t border-gray-800 bg-[#0f1522] shrink-0">
           <ul className="space-y-1">
             <li>
@@ -168,31 +170,30 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
         </div>
       </aside>
 
-      {/* === CONTEÚDO === */}
+      {/* === ÁREA DE CONTEÚDO PRINCIPAL === */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative w-full">
         
-        {/* HEADER SUPERIOR */}
+        {/* HEADER (Cabeçalho Superior) */}
         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10 shrink-0">
+          {/* Botão de abrir/fechar sidebar */}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-gray-100 rounded-md text-gray-600"
+            className="p-2 hover:bg-gray-100 rounded-md text-gray-600 transition-colors"
           >
             <Menu size={24} />
           </button>
 
+          {/* Área do Usuário (Lado Direito) */}
           <div className="flex items-center gap-4">
+            {/* Nome do Usuário */}
             <div className="text-right hidden sm:block">
               <p className="text-sm font-bold text-gray-800 leading-tight">
                 {user.name || 'Usuário'}
               </p>
-              
-              {user.organization ? (
-                 <p className="text-xs text-blue-600 font-medium">{user.organization.name}</p>
-              ) : (
-                 <p className="text-xs text-gray-400">Sem Organização</p>
-              )}
+              {/* Removido o cargo/organização daqui conforme solicitado */}
             </div>
             
+            {/* Avatar */}
             <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 overflow-hidden border border-gray-200">
                {user.avatarUrl ? (
                  <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -203,7 +204,7 @@ export default function MainLayout({ children, user }: MainLayoutProps) {
           </div>
         </header>
 
-        {/* ÁREA ROLÁVEL (PÁGINAS) */}
+        {/* CONTEÚDO DAS PÁGINAS (Children) */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 w-full">
           <div className="max-w-7xl mx-auto h-full">
              {children}

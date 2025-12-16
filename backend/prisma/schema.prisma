@@ -19,7 +19,7 @@ datasource db {
 enum Role {
   ADMIN              // Super Admin (Pleno)
   GESTOR_ORGANIZACAO // Dono/Gerente da Empresa/Prefeitura
-  USUARIO            // Membro comum (Servidor/Participante)
+  USUARIO            // Membro comum (user/Participante)
 }
 
 // Tipo da empresa

@@ -9,12 +9,12 @@ import LoginPage from './pages/auth/Login';
 // Layouts
 import MainLayout from './components/layouts/MainLayout'; 
 
-// Páginas - Servidor / Usuário Comum
-import ServidorDashboard from './pages/servidor/dashboard';
-import ServidorRanking from './pages/servidor/ranking';
-import ServidorSettings from './pages/servidor/settings';
-import Support from './pages/servidor/support';
-import ServerTasks from './pages/servidor/tasks';
+// Páginas -  Usuário Comum
+import UserDashboard from './pages/user/dashboard';
+import UserRanking from './pages/user/ranking';
+import UserSettings from './pages/user/settings';
+import Support from './pages/user/support';
+import ServerTasks from './pages/user/tasks';
 
 // Páginas - Gestor
 import GestorDashboard from './pages/gestor/dashboard';
@@ -70,8 +70,8 @@ function DashboardWrapper() {
     switch(role) {
       case 'ADMIN': return '/dashboard/admin';
       case 'GESTOR_ORGANIZACAO': return '/dashboard/gestor';
-      case 'USUARIO': return '/dashboard/servidor'; 
-      default: return '/dashboard/servidor';
+      case 'USUARIO': return '/dashboard/user'; 
+      default: return '/dashboard/user';
     }
   };
 
@@ -85,12 +85,12 @@ function DashboardWrapper() {
       <Routes>
         <Route path="configuracoes" element={<UserProfile />} />
 
-        {/* Rotas de Usuário (Antigo Servidor) */}
-        <Route path="servidor" element={<ServidorDashboard />} />
-        <Route path="servidor/ranking" element={<ServidorRanking />} />
-        <Route path="servidor/settings" element={<ServidorSettings />} />
-        <Route path="servidor/support" element={<Support />} />
-        <Route path="servidor/tarefas" element={<ServerTasks />} />
+        {/* Rotas de Usuário  */}
+        <Route path="user" element={<UserDashboard />} />
+        <Route path="user/ranking" element={<UserRanking />} />
+        <Route path="user/settings" element={<UserSettings />} />
+        <Route path="user/support" element={<Support />} />
+        <Route path="user/tarefas" element={<ServerTasks />} />
 
         {/* Rotas de Admin */}
         <Route path="admin" element={<AdminDashboard />} />

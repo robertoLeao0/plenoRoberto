@@ -4,7 +4,7 @@ Este repositório contém a base do backend (NestJS + Prisma + PostgreSQL) e do 
 
 ## Estrutura
 - `backend/`: API REST com módulos de autenticação, usuários, municípios, projetos, templates de dias, registros de ação, ranking, uploads e relatórios.
-- `frontend/`: SPA React com telas para login, dashboards de servidor, gestor e admin, usando React Router e React Query.
+- `frontend/`: SPA React com telas para login, dashboards de user, gestor e admin, usando React Router e React Query.
 
 ## Executando o backend
 1. Acesse `backend/` e copie `.env.example` para `.env`, ajustando:
