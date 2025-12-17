@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Building2, UserX, Upload, FileSpreadsheet, X, Download, Filter, Phone, Mail, User } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { 
+  Plus, Search, Building2, UserX, Upload, FileSpreadsheet, X, Filter, Phone, Mail 
+} from 'lucide-react';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import * as XLSX from 'xlsx';
@@ -14,7 +17,7 @@ export default function AdminUsersList() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
-  // 1. BUSCAR ORGANIZAÇÕES (Para o Filtro)
+  // 1. BUSCAR ORGANIZAÇÕES (Para o Filtro Visual)
   const { data: organizations } = useQuery({
     queryKey: ['organizations-list-simple'],
     queryFn: async () => (await api.get('/organizations')).data,
@@ -30,31 +33,45 @@ export default function AdminUsersList() {
     },
   });
 
-  // Importação (Mutation)
+  // 3. IMPORTAÇÃO (Mutation)
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      if (orgFilter && orgFilter !== 'null') {
-         formData.append('organizationId', orgFilter);
-      }
+      // NÃO ENVIAMOS MAIS O organizationId AQUI.
+      // O backend lerá o TOKEN de dentro da planilha.
+      
       return await api.post('/users/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
     onSuccess: (data) => {
-      toast.success(`Importação: ${data.data.success} sucessos, ${data.data.errors.length} erros.`);
-      if (data.data.errors.length > 0) alert('Erros:\n' + data.data.errors.join('\n'));
+      const { success, errors } = data.data;
+      if (success > 0) toast.success(`${success} usuários importados!`);
+      
+      if (errors && errors.length > 0) {
+        toast.warning(`${errors.length} erros encontrados. Verifique o console.`);
+        console.table(errors); // Mostra erros detalhados no F12
+      } else {
+        setIsImportModalOpen(false); // Só fecha se não tiver erros críticos pra corrigir
+      }
+
       queryClient.invalidateQueries({ queryKey: ['users-list'] });
-      setIsImportModalOpen(false);
       setFileToUpload(null);
     },
-    onError: () => toast.error('Erro ao importar.'),
+    onError: () => toast.error('Erro ao conectar com o servidor.'),
   });
 
+  // 4. DOWNLOAD MODELO (Atualizado com coluna TOKEN)
   const handleDownloadModel = () => {
     const ws = XLSX.utils.json_to_sheet([
-      { NOME: 'Fulano da Silva', EMAIL: 'fulano@email.com', TELEFONE: '11999999999', CPF: '12345678900', MUNICIPIO: 'Nome da Org' }
+      { 
+        NOME: 'Fulano da Silva', 
+        EMAIL: 'fulano@email.com', 
+        TELEFONE: '11999999999', 
+        CPF: '12345678900', 
+        TOKEN: 'COLE_O_TOKEN_DA_ORG_AQUI' // <--- Coluna Nova
+      }
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Modelo");
@@ -67,6 +84,7 @@ export default function AdminUsersList() {
 
   return (
     <div className="space-y-6 p-6">
+      <ToastContainer position="top-right" autoClose={3000} />
       
       {/* HEADER: Título e Ações */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -85,7 +103,7 @@ export default function AdminUsersList() {
           </button>
           
           <button 
-            onClick={() => navigate('/dashboard/admin/users/create')}
+            onClick={() => navigate('/dashboard/admin/users/create')} // Ajuste a rota se necessário
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             <Plus size={18} /> 
@@ -128,33 +146,17 @@ export default function AdminUsersList() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nome
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Telefone
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  E-mail
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Organização
-                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Telefone</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">E-mail</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Organização</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
-                    Carregando usuários...
-                  </td>
-                </tr>
+                <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-500">Carregando usuários...</td></tr>
               ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-gray-500">
-                    Nenhum usuário encontrado.
-                  </td>
-                </tr>
+                <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-500">Nenhum usuário encontrado.</td></tr>
               ) : (
                 filteredUsers.map((user: any) => (
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors">
@@ -215,7 +217,7 @@ export default function AdminUsersList() {
         </div>
       </div>
 
-      {/* MODAL IMPORTAÇÃO (MANTIDO) */}
+      {/* MODAL IMPORTAÇÃO */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
@@ -225,17 +227,31 @@ export default function AdminUsersList() {
              </div>
              
              <div className="space-y-4">
-                <button onClick={handleDownloadModel} className="text-sm text-blue-600 underline">Baixar Planilha Modelo</button>
+                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+                    <p className="font-bold mb-1">Atenção:</p>
+                    Para vincular o usuário à organização correta, preencha a coluna <strong>TOKEN</strong> na planilha. Você encontra este código na tela de detalhes da Organização.
+                </div>
+
+                <button onClick={handleDownloadModel} className="text-sm text-blue-600 underline flex items-center gap-1">
+                    <FileSpreadsheet size={14}/> Baixar Planilha Modelo
+                </button>
                 
-                <div className="border-2 border-dashed p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50 relative">
+                <div className="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50 relative">
                     <input type="file" accept=".xlsx" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFileToUpload(e.target.files?.[0] || null)} />
-                    {fileToUpload ? <span className="text-green-600 font-medium">{fileToUpload.name}</span> : <span className="text-gray-500">Clique para selecionar o arquivo</span>}
+                    {fileToUpload ? (
+                        <div className="text-green-600 font-medium flex flex-col items-center">
+                             <FileSpreadsheet size={32} className="mb-2"/>
+                             {fileToUpload.name}
+                        </div>
+                    ) : (
+                        <span className="text-gray-500">Clique ou arraste o arquivo aqui</span>
+                    )}
                 </div>
 
                 <button 
                   onClick={() => fileToUpload && importMutation.mutate(fileToUpload)}
                   disabled={!fileToUpload || importMutation.isPending}
-                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
                 >
                   {importMutation.isPending ? 'Enviando...' : 'Iniciar Importação'}
                 </button>

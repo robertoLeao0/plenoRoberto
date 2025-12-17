@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class OrganizationsService {
@@ -26,6 +27,21 @@ export class OrganizationsService {
       orderBy: { name: 'asc' },
     });
   }
+
+   // ==================================================================
+  // . GERAR TOKEN DE IMPORTAÇÃO
+  // ==================================================================
+
+  async generateToken(id: string) {
+  // Gera um token curto (ex: 8 caracteres) ou usa UUID completo. 
+  // Vamos usar 8 chars para facilitar o copy-paste na planilha.
+  const token = uuidv4().split('-')[0].toUpperCase(); 
+
+  return this.prisma.organization.update({
+    where: { id },
+    data: { importToken: token },
+  });
+}
 
   // ==================================================================
   // 2. DETALHES DA ORGANIZAÇÃO

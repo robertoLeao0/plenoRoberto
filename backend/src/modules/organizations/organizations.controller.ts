@@ -1,13 +1,13 @@
-import { 
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards 
+import {
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('organizations')
 @UseGuards(JwtAuthGuard)
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(private readonly organizationsService: OrganizationsService) { }
 
   // 1. LISTAR (Aceita ?status=active ou ?status=inactive)
   @Get()
@@ -67,5 +67,10 @@ export class OrganizationsController {
   @Delete('members/:userId')
   async removeMember(@Param('userId') userId: string) {
     return this.organizationsService.removeMember(userId);
+  }
+
+  @Patch(':id/token')
+  async generateToken(@Param('id') id: string) {
+    return this.organizationsService.generateToken(id);
   }
 }
