@@ -15,7 +15,6 @@ async function main() {
       name: 'Pleno Tecnologia',
       description: 'Matriz do Sistema',
       type: OrganizationType.SYSTEM, // Define como a org principal
-      active: true,
     },
   });
 

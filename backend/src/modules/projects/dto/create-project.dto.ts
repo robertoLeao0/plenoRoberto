@@ -1,4 +1,12 @@
-import { IsBoolean, IsDateString, IsNotEmpty, IsOptional, IsInt, IsString } from 'class-validator';
+import { 
+  IsBoolean, 
+  IsDateString, 
+  IsNotEmpty, 
+  IsOptional, 
+  IsInt, 
+  IsString, 
+  IsArray
+} from 'class-validator';
 
 export class CreateProjectDto {
   @IsNotEmpty()
@@ -15,9 +23,12 @@ export class CreateProjectDto {
   @IsDateString()
   endDate: string;
 
+  // === MUDANÇA AQUI ===
   @IsNotEmpty()
-  @IsString()
-  organizationId: string; // <--- O CORRETO É ORGANIZATION ID
+  @IsArray()                  
+  @IsString({ each: true })
+  organizationIds: string[];
+  // ====================
 
   @IsOptional()
   @IsBoolean()

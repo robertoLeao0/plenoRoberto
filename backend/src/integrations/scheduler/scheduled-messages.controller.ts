@@ -10,60 +10,45 @@ import {
   Query,
 } from '@nestjs/common';
 import { ScheduledMessagesService } from './scheduled-messages.service';
+// Ajuste os caminhos dos Guards conforme sua estrutura
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/enums/role.enum';
 
-@Controller('api/integrations/scheduled-messages')
+@Controller('scheduled-messages') // Rota base: /scheduled-messages
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ScheduledMessagesController {
-  constructor(private svc: ScheduledMessagesService) {}
+  constructor(private readonly service: ScheduledMessagesService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN_PLENO, UserRole.GESTOR_MUNICIPIO)
+  @Roles(UserRole.ADMIN)
   async list(@Query('projectId') projectId?: string) {
-    return this.svc.list(projectId);
+    return this.service.list(projectId);
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN_PLENO, UserRole.GESTOR_MUNICIPIO)
+  @Roles(UserRole.ADMIN)
   async get(@Param('id') id: string) {
-    return this.svc.get(id);
+    return this.service.get(id);
   }
 
   @Post()
-  @Roles(UserRole.ADMIN_PLENO)
+  @Roles(UserRole.ADMIN)
   async create(@Body() body: any) {
-    // body must include: title, body, scheduledAt, targetType, optional projectId/mediaUrl
-    return this.svc.create({
-      projectId: body.projectId ?? null,
-      title: body.title,
-      body: body.body,
-      mediaUrl: body.mediaUrl ?? null,
-      targetType: body.targetType ?? 'project',
-      targetValue: body.targetValue ?? null,
-      scheduledAt: new Date(body.scheduledAt),
-      repeatCron: body.repeatCron ?? null,
-      createdBy: body.createdBy ?? null,
-    });
+    // O body deve vir do front com title, body, scheduledAt, etc.
+    return this.service.create(body);
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN_PLENO)
+  @Roles(UserRole.ADMIN)
   async update(@Param('id') id: string, @Body() body: any) {
-    return this.svc.update(id, body);
-  }
-
-  @Post(':id/send-now')
-  @Roles(UserRole.ADMIN_PLENO)
-  async sendNow(@Param('id') id: string) {
-    return this.svc.sendNow(id);
+    return this.service.update(id, body);
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN_PLENO)
+  @Roles(UserRole.ADMIN)
   async remove(@Param('id') id: string) {
-    return this.svc.remove(id);
+    return this.service.remove(id);
   }
 }

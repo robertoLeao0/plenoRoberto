@@ -297,15 +297,15 @@ export default function Details() {
             </div>
 
 
-            {/* TOKEN DE INTEGRAÇÃO */}
+            {/* TOKEN DE IMPORTAÇÃO */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-3">
               <div className="flex justify-between items-start mb-4">
                 <div>
                    <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
-                     <Key size={16} className="text-amber-500"/> Token de Integração
+                     <Key size={16} className="text-amber-500"/> Token de Importação
                    </h3>
                    <p className="text-xs text-gray-500 mt-1">
-                     Utilize este token para autenticar requisições na API externa.
+                     Utilize este token para importar usuários.
                    </p>
                 </div>
                 <button 

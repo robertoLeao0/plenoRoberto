@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Delete } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Param, 
+  Delete, 
+  Query, 
+  UseGuards 
+} from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -12,19 +22,22 @@ import { UserRole } from '../../common/enums/role.enum';
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  // AQUI: Mudamos para UserRole.ADMIN
   @Roles(UserRole.ADMIN) 
   @Post()
-  create(@Body() dto: CreateProjectDto) {
-    return this.projectsService.create(dto);
+  create(@Body() createProjectDto: CreateProjectDto) {
+    return this.projectsService.create(createProjectDto);
   }
 
   @Get()
-  findAll(@Query('organizationId') organizationId?: string, @Query('isActive') isActive?: string) {
-    const filters: any = {};
-    if (organizationId) filters.organizationId = organizationId;
-    if (isActive !== undefined) filters.isActive = isActive === 'true';
-    return this.projectsService.findAll(filters);
+  findAll(
+    @Query('organizationId') organizationId?: string, 
+    @Query('isActive') isActive?: string
+  ) {
+    const activeBoolean = isActive !== undefined ? isActive === 'true' : undefined;
+    return this.projectsService.findAll({ 
+      organizationId, 
+      isActive: activeBoolean 
+    });
   }
 
   @Get(':id')
@@ -34,13 +47,33 @@ export class ProjectsController {
 
   @Roles(UserRole.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
-    return this.projectsService.update(id, dto);
+  update(@Param('id') id: string, @Body() updateProjectDto: UpdateProjectDto) {
+    return this.projectsService.update(id, updateProjectDto);
   }
 
+  // Inativar (Soft Delete)
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.projectsService.remove(id);
+  }
+
+  // Reativar (Novo endpoint)
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/reactivate')
+  reactivate(@Param('id') id: string) {
+    return this.projectsService.reactivate(id);
+  }
+
+  // Excluir Permanentemente (Novo endpoint)
+  @Roles(UserRole.ADMIN)
+  @Delete(':id/permanent')
+  deletePermanent(@Param('id') id: string) {
+    return this.projectsService.deletePermanent(id);
+  }
+
+  @Get(':id/tasks')
+  getTasks(@Param('id') id: string) {
+    return this.projectsService.findTasksByProject(id);
   }
 }

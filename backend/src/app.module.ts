@@ -13,10 +13,11 @@ import { DayTemplatesModule } from './modules/day-templates/day-templates.module
 import { ActionLogsModule } from './modules/action-logs/action-logs.module';
 import { RankingModule } from './modules/ranking/ranking.module';
 import { ReportsModule } from './modules/reports/reports.module';
-import { TaskModule } from './tasks/task.module';
+import { TaskModule } from './modules/tasks/task.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ScheduledMessagesModule } from './integrations/scheduler/scheduled-messages.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     IntegrationsModule,
     OrganizationsModule,
     DashboardModule,
+    ScheduledMessagesModule,
   ],
   providers: [PrismaService],
 })

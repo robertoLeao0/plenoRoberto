@@ -56,8 +56,9 @@ enum TaskStatus {
 
 // Status do envio de mensagem
 enum TaskLogStatus {
-  SUCESSO
-  FALHA
+  SUCCESS
+  FAILED
+  PENDING
 }
 
 // ========================================================
@@ -67,30 +68,34 @@ enum TaskLogStatus {
 model Organization {
   id          String           @id @default(uuid())
   name        String           // Ex: "Prefeitura de Cajamar"
-  importToken String?  @unique
+  importToken String?          @unique
   description String?          // Descrição detalhada
-  location    String?       
+  location    String?        
   cnpj        String?          // Para fins fiscais
-   
-  // === CONTROLE DE ACESSO (MUDANÇA AQUI) ===
-  // Se estiver null, a organização está ATIVA.
-  // Se tiver uma data, ela foi "excluída" (Soft Delete).
+    
+  // === CONTROLE DE ACESSO ===
+  // null = ATIVA | data = INATIVA (Soft Delete)
   deletedAt   DateTime?        
-   
+    
   type        OrganizationType @default(CUSTOMER)
-   
+    
   // === RELACIONAMENTOS ===
-   
-  // 1. Gestor Principal
+    
+  // 1. Gestor Principal (Quem manda na organização)
   managerId   String?
   manager     User?            @relation("OrgManager", fields: [managerId], references: [id])
 
-  // 2. Membros
+  // 2. Membros (Funcionários/Usuários vinculados)
   users       User[]           @relation("OrgMembers")
 
-  // 3. Projetos
+  // 3. Projetos (Que pertencem a esta organização)
   projects    Project[]
-   
+
+  // 4. Tarefas (CORREÇÃO APLICADA)
+  // Esse campo cria o relacionamento N:N (Muitos-para-Muitos).
+  // O Prisma vai criar automaticamente uma tabela "_OrganizationToTask" no banco.
+  tasks       Task[]
+    
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -208,29 +213,38 @@ model Subscription {
 
 // A Tarefa em si (Mensagem ou Atividade de Gestão)
 model Task {
-  id            String      @id @default(uuid())
-  title         String      // Título interno
+  id            String    @id @default(uuid())
+  title         String    // Título (ex: "DIA 1")
+  description   String?   @db.Text 
   
-  content       String?     @db.Text 
+  startAt       DateTime? // Data de liberação
+  endAt         DateTime? // Data de bloqueio/fim
   
-  sendAt        DateTime?   // Agendamento
-  deadline      DateTime?   // Prazo final
-  
-  status        TaskStatus  @default(RASCUNHO)
-  isActive      Boolean     @default(true)
-  
+  // Status como String para evitar conflitos de Enum antigos
+  status        String    @default("PENDING") 
+
+  requireMedia  Boolean   @default(false)      
+  isActive      Boolean   @default(true)
+
+  // === RELACIONAMENTO COM PROJETO (1:N) ===
+  // Uma tarefa pertence a UM projeto. Aqui cria a coluna 'projectId'.
   projectId     String
-  project       Project     @relation(fields: [projectId], references: [id])
+  project       Project   @relation(fields: [projectId], references: [id])
 
-  // Quem criou?
+  // === RELACIONAMENTO COM ORGANIZAÇÕES (N:N) ===
+  // Uma tarefa pode aparecer para VÁRIAS organizações.
+  // O Prisma NÃO cria coluna 'organizationId' aqui. Ele cria uma tabela pivô automática.
+  organizations Organization[] 
+
+  // === QUEM CRIOU ===
   creatorId     String?
-  creator       User?       @relation("TaskCreator", fields: [creatorId], references: [id])
+  creator       User?     @relation("TaskCreator", fields: [creatorId], references: [id])
 
-  // Histórico de envios
-  logs          TaskLog[]   
+  // === LOGS DE ENVIO ===
+  logs          TaskLog[] 
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@map("tasks")
 }
@@ -334,6 +348,31 @@ model IntegrationSetting {
   @@unique([name, projectId])
   @@map("integration_settings")
 }
+
+
+// ========================================================
+// 9. MENSAGENS AGENDADAS (NOVA TABELA NECESSÁRIA)
+// ========================================================
+// Adicionei isso para corrigir o erro "Property scheduledMessage does not exist"
+model ScheduledMessage {
+  id          String   @id @default(uuid())
+  projectId   String?  
+  title       String
+  body        String   @db.Text
+  mediaUrl    String?
+  targetType  String   @default("project") 
+  targetValue String?  
+  scheduledAt DateTime 
+  repeatCron  String?  
+  status      String   @default("scheduled") 
+  lastResult  Json?    
+  createdBy   String?  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("scheduled_messages")
+}
+
 
 model ManychatConnection {
   id              String    @id @default(uuid())

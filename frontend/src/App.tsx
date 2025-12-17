@@ -29,6 +29,7 @@ import EditTask from './pages/admin/projects/Edit';
 import ProjectTasks from './pages/admin/projects/Tasks';
 import Integrations from './pages/admin/integrations';
 import UserProfile from './pages/common/UserProfile'; 
+import ProjectDetails from './pages/admin/projects/Details';
 
 // Páginas - Organizações e Auditoria
 import OrganizationsList from './pages/admin/organizations/List';
@@ -104,6 +105,7 @@ function DashboardWrapper() {
         <Route path="admin/projects/create" element={<AdminProjectCreate />} />
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
+        <Route path="admin/projects/:id" element={<ProjectDetails />} />
         
         {/* Admin - Integrações */}
         <Route path="admin/integrations" element={<Integrations />} />

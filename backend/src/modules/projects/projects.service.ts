@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProjectsService {
@@ -11,42 +12,59 @@ export class ProjectsService {
   // CRIAR PROJETO
   // ==================================================================
   async create(createProjectDto: CreateProjectDto) {
-    // Extraímos organizationIds se você estiver enviando IDs para vincular
-    // e removemos isActive se ele ainda existir no DTO para não quebrar o Prisma
     const { organizationIds, isActive, ...rest } = createProjectDto as any;
 
     return this.prisma.project.create({
       data: {
         ...rest,
-        // Ao criar, deletedAt é null (ativo) por padrão.
+        // Define deletedAt baseado no isActive
+        deletedAt: isActive === false ? new Date() : null,
         
-        // Se houver IDs de organizações, fazemos o vínculo (Many-to-Many)
-        organizations: organizationIds
+        // Vínculo Many-to-Many
+        organizations: organizationIds?.length
           ? {
               connect: organizationIds.map((id: string) => ({ id })),
             }
           : undefined,
       },
       include: {
-        organizations: true, // Retorna as orgs vinculadas
+        organizations: true,
       },
     });
   }
 
   // ==================================================================
-  // LISTAR TODOS (Apenas os ATIVOS)
+  // LISTAR TODOS (Com Filtros)
   // ==================================================================
-  async findAll() {
+  async findAll(filters: { organizationId?: string; isActive?: boolean } = {}) {
+    const where: Prisma.ProjectWhereInput = {};
+
+    // Filtro Ativo/Inativo
+    if (filters.isActive === true) {
+      where.deletedAt = null;
+    } else if (filters.isActive === false) {
+      where.deletedAt = { not: null };
+    }
+    // IMPORTANTE: Se isActive for undefined, NÃO adiciona filtro de deletedAt
+    // Assim, retorna tudo para o admin filtrar no front
+
+    // Filtro Organização
+    if (filters.organizationId) {
+      where.organizations = {
+        some: {
+          id: filters.organizationId,
+        },
+      };
+    }
+
     return this.prisma.project.findMany({
-      where: {
-        deletedAt: null, // Filtra apenas projetos que NÃO foram deletados
-      },
+      where,
       include: {
         organizations: {
-          select: { name: true }, // Traz apenas o nome das orgs para não pesar
+          select: { id: true, name: true },
         },
         _count: {
-          select: { tasks: true, subscribers: true }, // Contagem de tarefas e inscritos
+          select: { tasks: true, subscribers: true },
         },
       },
       orderBy: {
@@ -56,7 +74,7 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // BUSCAR UM POR ID
+  // BUSCAR UM
   // ==================================================================
   async findOne(id: string) {
     const project = await this.prisma.project.findUnique({
@@ -64,7 +82,11 @@ export class ProjectsService {
       include: {
         organizations: true,
         dayTemplates: {
-          orderBy: { dayNumber: 'asc' }, // Ordena os dias (Dia 1, Dia 2...)
+          orderBy: { dayNumber: 'asc' },
+        },
+        tasks: {
+          take: 5,
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
@@ -73,34 +95,22 @@ export class ProjectsService {
       throw new NotFoundException(`Projeto com ID ${id} não encontrado.`);
     }
 
-    // Opcional: Se quiser impedir ver deletados, descomente abaixo:
-    // if (project.deletedAt) throw new NotFoundException('Projeto excluído.');
-
     return project;
   }
 
   // ==================================================================
-  // ATUALIZAR PROJETO
+  // ATUALIZAR
   // ==================================================================
   async update(id: string, updateProjectDto: UpdateProjectDto) {
-    // 1. Verificamos se o projeto existe
     await this.findOne(id);
 
-    // 2. Tratamento de Compatibilidade (isActive -> deletedAt)
-    // O "as any" é para o TypeScript não reclamar se o DTO não tiver deletedAt tipado ainda
     const { isActive, organizationIds, ...rest } = updateProjectDto as any;
-    
     const dataToUpdate: any = { ...rest };
 
-    // Se o frontend mandou "isActive", convertemos para a lógica de Soft Delete
     if (isActive !== undefined) {
-      // isActive = true  -> deletedAt = null
-      // isActive = false -> deletedAt = AGORA
       dataToUpdate.deletedAt = isActive ? null : new Date();
     }
 
-    // Se mandou lista de organizações, atualizamos os vínculos
-    // "set" substitui todas as anteriores pelas novas
     const organizationsUpdate = organizationIds
       ? { set: organizationIds.map((orgId: string) => ({ id: orgId })) }
       : undefined;
@@ -111,16 +121,17 @@ export class ProjectsService {
         ...dataToUpdate,
         organizations: organizationsUpdate,
       },
+      include: {
+        organizations: true,
+      },
     });
   }
 
   // ==================================================================
-  // REMOVER (SOFT DELETE)
+  // INATIVAR (Soft Delete)
   // ==================================================================
   async remove(id: string) {
     await this.findOne(id);
-
-    // Não deletamos o registro, apenas marcamos a data de exclusão
     return this.prisma.project.update({
       where: { id },
       data: {
@@ -130,18 +141,35 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // EXTRAS: Buscar Tarefas do Projeto (Correção do seu erro)
+  // REATIVAR (Novo)
+  // ==================================================================
+  async reactivate(id: string) {
+    await this.findOne(id);
+    return this.prisma.project.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+  }
+
+  // ==================================================================
+  // EXCLUIR PERMANENTEMENTE (Novo)
+  // ==================================================================
+  async deletePermanent(id: string) {
+    return this.prisma.project.delete({
+      where: { id },
+    });
+  }
+
+  // ==================================================================
+  // TAREFAS
   // ==================================================================
   async findTasksByProject(projectId: string) {
     return this.prisma.task.findMany({
-      where: {
-        projectId,
-        status: { not: 'CANCELADO' }, // Exemplo: não trazer canceladas
-      },
-      // CORREÇÃO DO ERRO 2353: Trocamos 'dataPrevista' por 'sendAt'
-      orderBy: {
-        sendAt: 'asc', 
-      },
+      where: { projectId },
+      orderBy: [
+        { sendAt: 'asc' }, 
+        { createdAt: 'asc' }
+      ], 
     });
   }
 }
