@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../../services/api';
 import { FaUserCircle, FaEnvelope, FaLock } from 'react-icons/fa';
 
-export default function ServidorSettings() {
+export default function UserSettings() {
   const { data: user, isLoading, isError } = useQuery({
     queryKey: ['user-me'],
     queryFn: async () => {

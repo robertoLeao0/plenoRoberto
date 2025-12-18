@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../services/api';
 
-export default function ServidorRanking() {
+export default function UserRanking() {
   // Vamos usar um ProjectId fixo ("sample") por enquanto, até implementarmos a seleção de projeto.
   const PROJECT_ID = 'sample'; 
   

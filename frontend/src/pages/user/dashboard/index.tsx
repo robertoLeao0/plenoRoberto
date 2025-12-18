@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-// Se você tiver um componente de Layout, mantenha o import dele, 
-// mas geralmente o Layout já vem do DashboardWrapper no App.tsx.
+import api from '../../../services/api'; // Usamos o axios configurado
 
 interface Task {
   id: number;
@@ -11,20 +10,22 @@ interface Task {
   ativo: boolean;
 }
 
-export default function ServidorDashboard() {
+export default function UserDashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Busca as tarefas ATIVAS do Backend
   const fetchTasks = async () => {
     try {
-      // Importante: Usando o /api/tasks que configuramos
-      const response = await fetch('http://localhost:3000/api/tasks');
-      const data = await response.json();
-      setTasks(data);
+      // CORREÇÃO: Usamos 'api.get' ao invés de 'fetch'.
+      // Assim o token de login é enviado automaticamente.
+      // Se a rota no backend for '/tasks', mantenha assim. 
+      // Se for '/api/tasks', ajuste para api.get('/api/tasks')
+      const response = await api.get<Task[]>('/tasks'); 
+      setTasks(response.data);
     } catch (error) {
-      console.error(error);
-      toast.error('Erro ao carregar suas tarefas.');
+      console.error("Erro ao buscar tarefas:", error);
+      // Não exibimos toast de erro no primeiro load para não assustar se for só vazio
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ export default function ServidorDashboard() {
       <div className="mb-8 border-b pb-4">
         <h1 className="text-3xl font-bold text-gray-800">Minha Jornada</h1>
         <p className="text-gray-500 mt-2">
-          Aqui estão as tarefas liberadas pelo administrador para você.
+          Aqui estão as tarefas liberadas para você hoje.
         </p>
       </div>
 
@@ -62,7 +63,7 @@ export default function ServidorDashboard() {
         <div className="bg-white p-10 rounded-lg shadow-sm border border-gray-200 text-center">
           <div className="text-6xl mb-4">🎉</div>
           <h3 className="text-xl font-medium text-gray-800">Tudo limpo!</h3>
-          <p className="text-gray-500 mt-2">Nenhuma tarefa pendente para hoje.</p>
+          <p className="text-gray-500 mt-2">Nenhuma tarefa pendente no momento.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -94,7 +95,7 @@ export default function ServidorDashboard() {
 
                 <button 
                   className="w-full py-2 bg-indigo-50 text-indigo-700 font-medium rounded-lg hover:bg-indigo-100 transition-colors text-sm flex items-center justify-center gap-2"
-                  onClick={() => toast.info('Em breve: funcionalidade de concluir tarefa!')}
+                  onClick={() => toast.info('Funcionalidade de concluir tarefa em breve!')}
                 >
                   <span>Ver Detalhes</span>
                 </button>

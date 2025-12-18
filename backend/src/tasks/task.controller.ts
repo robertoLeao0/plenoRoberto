@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, Query, UseGuards } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { JwtAuthGuard } from '../modules/auth/jwt-auth.guard';
+import { ActionStatus } from '@prisma/client';
 
 @Controller('tasks')
+@UseGuards(JwtAuthGuard)
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
@@ -11,14 +14,25 @@ export class TaskController {
     return this.taskService.create(createTaskDto);
   }
 
-  // GET /api/tasks?projectId=123
   @Get()
   findAll(@Query('projectId') projectId: string) {
     if (!projectId) {
-      // Se não passar projeto, retorna vazio ou erro (sua escolha)
       return []; 
     }
     return this.taskService.findAllByProject(projectId);
+  }
+
+  @Get('audit/user/:userId/org/:orgId')
+  getUserJornada(@Param('userId') userId: string, @Param('orgId') orgId: string) {
+    return this.taskService.getUserJornada(userId, orgId);
+  }
+
+  @Patch('audit/:logId')
+  evaluateAction(
+    @Param('logId') logId: string, 
+    @Body() body: { status: ActionStatus, notes?: string }
+  ) {
+    return this.taskService.evaluateAction(logId, body.status, body.notes);
   }
 
   @Get(':id')

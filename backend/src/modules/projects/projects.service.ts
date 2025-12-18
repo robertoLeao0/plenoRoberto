@@ -1,62 +1,147 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProjectDto) {
-    // Verifica se a ORGANIZAÇÃO existe (não município)
-    const org = await this.prisma.organization.findUnique({
-      where: { id: dto.organizationId }
-    });
-
-    if (!org) {
-      throw new BadRequestException('Organização não encontrada.');
-    }
+  // ==================================================================
+  // CRIAR PROJETO
+  // ==================================================================
+  async create(createProjectDto: CreateProjectDto) {
+    // Extraímos organizationIds se você estiver enviando IDs para vincular
+    // e removemos isActive se ele ainda existir no DTO para não quebrar o Prisma
+    const { organizationIds, isActive, ...rest } = createProjectDto as any;
 
     return this.prisma.project.create({
       data: {
-        name: dto.name,
-        description: dto.description,
-        organizationId: dto.organizationId, // <--- Salva corretamente
-        isActive: dto.isActive,
-        totalDays: dto.totalDays,
-        // Garante que são datas válidas
-        startDate: new Date(dto.startDate),
-        endDate: new Date(dto.endDate),
+        ...rest,
+        // Ao criar, deletedAt é null (ativo) por padrão.
+        
+        // Se houver IDs de organizações, fazemos o vínculo (Many-to-Many)
+        organizations: organizationIds
+          ? {
+              connect: organizationIds.map((id: string) => ({ id })),
+            }
+          : undefined,
+      },
+      include: {
+        organizations: true, // Retorna as orgs vinculadas
       },
     });
   }
 
-  // ... (o restante dos métodos update, findAll mantidos iguais, só atente para trocar municipalityId por organizationId se houver)
-  
-  findAll(filters?: { organizationId?: string; isActive?: boolean }) {
+  // ==================================================================
+  // LISTAR TODOS (Apenas os ATIVOS)
+  // ==================================================================
+  async findAll() {
     return this.prisma.project.findMany({
-      where: { ...filters },
-      orderBy: { createdAt: 'desc' },
-      include: { organization: true }
+      where: {
+        deletedAt: null, // Filtra apenas projetos que NÃO foram deletados
+      },
+      include: {
+        organizations: {
+          select: { name: true }, // Traz apenas o nome das orgs para não pesar
+        },
+        _count: {
+          select: { tasks: true, subscribers: true }, // Contagem de tarefas e inscritos
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
   }
-  
-  // ... métodos findOne e remove ...
+
+  // ==================================================================
+  // BUSCAR UM POR ID
+  // ==================================================================
   async findOne(id: string) {
-    return this.prisma.project.findUnique({ where: { id } });
+    const project = await this.prisma.project.findUnique({
+      where: { id },
+      include: {
+        organizations: true,
+        dayTemplates: {
+          orderBy: { dayNumber: 'asc' }, // Ordena os dias (Dia 1, Dia 2...)
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Projeto com ID ${id} não encontrado.`);
+    }
+
+    // Opcional: Se quiser impedir ver deletados, descomente abaixo:
+    // if (project.deletedAt) throw new NotFoundException('Projeto excluído.');
+
+    return project;
   }
 
-  async update(id: string, dto: UpdateProjectDto) {
-      const { startDate, endDate, ...rest } = dto;
-      const data: any = { ...rest };
-      
-      if (startDate) data.startDate = new Date(startDate);
-      if (endDate) data.endDate = new Date(endDate);
+  // ==================================================================
+  // ATUALIZAR PROJETO
+  // ==================================================================
+  async update(id: string, updateProjectDto: UpdateProjectDto) {
+    // 1. Verificamos se o projeto existe
+    await this.findOne(id);
 
-      return this.prisma.project.update({ where: { id }, data });
+    // 2. Tratamento de Compatibilidade (isActive -> deletedAt)
+    // O "as any" é para o TypeScript não reclamar se o DTO não tiver deletedAt tipado ainda
+    const { isActive, organizationIds, ...rest } = updateProjectDto as any;
+    
+    const dataToUpdate: any = { ...rest };
+
+    // Se o frontend mandou "isActive", convertemos para a lógica de Soft Delete
+    if (isActive !== undefined) {
+      // isActive = true  -> deletedAt = null
+      // isActive = false -> deletedAt = AGORA
+      dataToUpdate.deletedAt = isActive ? null : new Date();
+    }
+
+    // Se mandou lista de organizações, atualizamos os vínculos
+    // "set" substitui todas as anteriores pelas novas
+    const organizationsUpdate = organizationIds
+      ? { set: organizationIds.map((orgId: string) => ({ id: orgId })) }
+      : undefined;
+
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        ...dataToUpdate,
+        organizations: organizationsUpdate,
+      },
+    });
   }
 
+  // ==================================================================
+  // REMOVER (SOFT DELETE)
+  // ==================================================================
   async remove(id: string) {
-      return this.prisma.project.delete({ where: { id } });
+    await this.findOne(id);
+
+    // Não deletamos o registro, apenas marcamos a data de exclusão
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+  }
+
+  // ==================================================================
+  // EXTRAS: Buscar Tarefas do Projeto (Correção do seu erro)
+  // ==================================================================
+  async findTasksByProject(projectId: string) {
+    return this.prisma.task.findMany({
+      where: {
+        projectId,
+        status: { not: 'CANCELADO' }, // Exemplo: não trazer canceladas
+      },
+      // CORREÇÃO DO ERRO 2353: Trocamos 'dataPrevista' por 'sendAt'
+      orderBy: {
+        sendAt: 'asc', 
+      },
+    });
   }
 }

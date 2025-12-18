@@ -1,43 +1,51 @@
-// --------------------------------------------------------
-// CONFIGURAÇÕES GERAIS
-// --------------------------------------------------------
+// ========================================================
+// 1. CONFIGURAÇÕES GERAIS
+// ========================================================
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql" // Mantido MySQL conforme seu snippet
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-// --------------------------------------------------------
-// ENUMS
-// --------------------------------------------------------
+// ========================================================
+// 2. ENUMS (LISTAS DE OPÇÕES)
+// ========================================================
 
-// Atualizado para refletir a hierarquia do Dashboard
+// Níveis de acesso do sistema
 enum Role {
-  ADMIN               // Super Admin (Pleno)
-  GESTOR_ORGANIZACAO  // Dono/Gerente da Empresa/Prefeitura
-  USUARIO             // Membro comum (Servidor/Participante)
+  ADMIN              // Super Admin (Pleno)
+  GESTOR_ORGANIZACAO // Dono/Gerente da Empresa/Prefeitura
+  USUARIO            // Membro comum (user/Participante)
 }
 
+// Tipo da empresa
 enum OrganizationType {
-  SYSTEM      // Organização "Mãe" (Seu time Pleno)
-  CUSTOMER    // Clientes (Prefeituras, Empresas)
+  CUSTOMER
+  PARTNER
+  INTERNAL
+  SYSTEM
 }
 
+// Status de gamificação
 enum ActionStatus {
-  PENDENTE
-  CONCLUIDO
+  PENDENTE      // Usuário ainda não fez nada
+  EM_ANALISE    // Usuário enviou, aguardando gestor
+  APROVADO      // Gestor aceitou
+  REJEITADO     // Gestor negou (vai usar o campo 'notes' para explicar)
 }
 
+// Categorias de tarefas diárias
 enum DayCategory {
   CORPO
   MENTE
   ESPIRITO
 }
 
+// Status das Tarefas/Mensagens
 enum TaskStatus {
   RASCUNHO
   AGENDADO
@@ -46,119 +54,141 @@ enum TaskStatus {
   CANCELADO
 }
 
+// Status do envio de mensagem
 enum TaskLogStatus {
   SUCESSO
   FALHA
 }
 
-// --------------------------------------------------------
-// ORGANIZAÇÕES (O Topo da Pirâmide)
-// --------------------------------------------------------
+// ========================================================
+// 3. ORGANIZAÇÕES (TOPO DA HIERARQUIA)
+// ========================================================
 
 model Organization {
-  id           String           @id @default(uuid())
-  name         String           // Ex: "Prefeitura de Cajamar"
-  description  String?          
-  location     String?          
-  cnpj         String?          // Adicionado caso precise para NFe/Cadastro
-  
-  type         OrganizationType @default(CUSTOMER)
-  active       Boolean          @default(true)
-  
-  // Relações
-  users        User[]           
-  projects     Project[]        
-  
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id          String           @id @default(uuid())
+  name        String           // Ex: "Prefeitura de Cajamar"
+  importToken String?  @unique
+  description String?          // Descrição detalhada
+  location    String?       
+  cnpj        String?          // Para fins fiscais
+   
+  // === CONTROLE DE ACESSO (MUDANÇA AQUI) ===
+  // Se estiver null, a organização está ATIVA.
+  // Se tiver uma data, ela foi "excluída" (Soft Delete).
+  deletedAt   DateTime?        
+   
+  type        OrganizationType @default(CUSTOMER)
+   
+  // === RELACIONAMENTOS ===
+   
+  // 1. Gestor Principal
+  managerId   String?
+  manager     User?            @relation("OrgManager", fields: [managerId], references: [id])
+
+  // 2. Membros
+  users       User[]           @relation("OrgMembers")
+
+  // 3. Projetos
+  projects    Project[]
+   
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@map("organizations")
 }
 
-// --------------------------------------------------------
-// USUÁRIOS
-// --------------------------------------------------------
+// ========================================================
+// 4. USUÁRIOS (PESSOAS DO SISTEMA)
+// ========================================================
 
 model User {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  cpf          String?  @unique
-  password     String    // Padronizado para 'password' para bater com o Controller
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  cpf            String?   @unique
+  password       String    
   
-  // === CAMPO NOVO: AVATAR ===
-  avatarUrl    String?   
+  // === DADOS PESSOAIS ===
+  avatarUrl      String?   
+  phone          String?   @unique 
+  
+  // === PERMISSÕES E VÍNCULOS ===
+  role           Role      @default(USUARIO)
 
-  // === CARGO ATUALIZADO ===
-  role         Role      @default(USUARIO)
-  
-  // O usuário pertence a UMA Organização
+  // 1. Membro de uma organização (Relação "OrgMembers")
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  
-  // Dados de Integração (WhatsApp)
-  phone                 String?   @unique 
-  manychatSubscriberId  String?   @unique 
+  organization   Organization? @relation("OrgMembers", fields: [organizationId], references: [id])
 
-  // Relações de uso do sistema
-  subscriptions     Subscription[]   // Inscrições em jornadas
-  actionLogs        ActionLog[]      // Diário/Logs de gamificação
-  ranking           RankingSummary[] // Pontuação
-  receivedMessages  TaskLog[]        // Histórico de msg recebidas
-  
-  // Controle de Tarefas (Se ele for responsável por criar/gerenciar)
-  tasksCreated      Task[]           @relation("TaskCreator")
+  // 2. Gestor de várias organizações (Relação "OrgManager")
+  managedOrganizations Organization[] @relation("OrgManager")
 
-  deletedAt         DateTime? // Soft Delete
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  // === INTEGRAÇÕES ===
+  manychatSubscriberId String?   @unique 
+
+  // === RELAÇÕES DE USO ===
+  subscriptions    Subscription[]    // Jornadas que participa
+  actionLogs       ActionLog[]       // Diário de gamificação
+  ranking          RankingSummary[]  // Pontuação acumulada
+  receivedMessages TaskLog[]         // Histórico de msgs recebidas
+  
+  // Tarefas que ele criou (se for Admin/Gestor)
+  tasksCreated     Task[]            @relation("TaskCreator")
+
+  // === CONTROLE ===
+  deletedAt      DateTime? // Soft Delete
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@map("users")
 }
 
-// --------------------------------------------------------
-// PROJETOS (Jornadas dentro da Organização)
-// --------------------------------------------------------
+// ========================================================
+// 5. PROJETOS (JORNADAS / CAMPANHAS)
+// ========================================================
 
 model Project {
-  id           String    @id @default(uuid())
-  name         String
-  description  String?
-  
-  startDate    DateTime?      
-  endDate      DateTime?
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+   
+  startDate   DateTime?       
+  endDate     DateTime?
 
-  // O Projeto pertence a uma Organização
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  // === CONTROLE DE ACESSO (MUDANÇA AQUI) ===
+  // Substitui o "isActive". 
+  // Para buscar projetos ativos use: where: { deletedAt: null }
+  deletedAt   DateTime?        
   
-  isActive       Boolean       @default(true)
-  
-  // Relações
-  tasks          Task[]        // Mensagens/Tarefas do projeto
-  subscribers    Subscription[] // Pessoas inscritas
-  
-  // Legado (Gamificação)
-  totalDays      Int           @default(21)
+  // Relação Muitos-para-Muitos com Organizações
+  organizations  Organization[] 
+   
+  // Mantido com valor padrão
+  totalDays      Int             @default(30)
+
+  // === CONTEÚDO E RELAÇÕES ===
+  tasks          Task[]           
+  subscribers    Subscription[]   
+   
+  // === GAMIFICAÇÃO ===
   dayTemplates   DayTemplate[]
   actionLogs     ActionLog[]
   ranking        RankingSummary[]
-  
-  // Integrações
+   
+  // === INTEGRAÇÕES ===
   integrations   IntegrationSetting[]
   manychatConn   ManychatConnection[]
-  
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+   
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@map("projects")
 }
 
-// --------------------------------------------------------
-// AUTOMAÇÃO E MENSAGENS (Tarefas)
-// --------------------------------------------------------
+// ========================================================
+// 6. AUTOMAÇÃO E MENSAGENS (TAREFAS)
+// ========================================================
 
-// Inscrição: Liga o Usuário ao Projeto
+// Tabela Pivô: Quem está inscrito em qual Projeto
 model Subscription {
   id        String   @id @default(uuid())
   active    Boolean  @default(true)
@@ -176,36 +206,36 @@ model Subscription {
   @@map("subscriptions")
 }
 
-// Tarefa (Pode ser uma Tarefa de Gestão OU uma Mensagem Agendada)
+// A Tarefa em si (Mensagem ou Atividade de Gestão)
 model Task {
-  id           String     @id @default(uuid())
-  title        String     // Nome interno da tarefa
+  id            String      @id @default(uuid())
+  title         String      // Título interno
   
-  // Conteúdo (Se for mensagem) ou Descrição (Se for tarefa de gestão)
-  content      String?    @db.Text 
+  content       String?     @db.Text 
   
-  sendAt       DateTime?  // Data agendada (se for mensagem)
-  deadline     DateTime?  // Prazo (se for tarefa de gestão)
+  sendAt        DateTime?   // Agendamento
+  deadline      DateTime?   // Prazo final
   
-  status       TaskStatus @default(RASCUNHO)
-  isActive     Boolean    @default(true) // Para mostrar/esconder no dashboard
+  status        TaskStatus  @default(RASCUNHO)
+  isActive      Boolean     @default(true)
   
-  projectId    String
-  project      Project    @relation(fields: [projectId], references: [id])
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id])
 
-  // Quem criou ou é responsável por essa tarefa (Gestor)
-  creatorId    String?
-  creator      User?      @relation("TaskCreator", fields: [creatorId], references: [id])
+  // Quem criou?
+  creatorId     String?
+  creator       User?       @relation("TaskCreator", fields: [creatorId], references: [id])
 
-  logs         TaskLog[]  // Histórico de disparos (se for mensagem)
+  // Histórico de envios
+  logs          TaskLog[]   
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@map("tasks")
 }
 
-// Log individual de envio (Auditoria de Mensagens)
+// Log de disparo (Para saber quem recebeu o que)
 model TaskLog {
   id        String        @id @default(uuid())
   status    TaskLogStatus
@@ -215,15 +245,77 @@ model TaskLog {
   taskId    String
   task      Task          @relation(fields: [taskId], references: [id])
 
-  userId    String        // Quem recebeu a mensagem
+  userId    String        // Quem recebeu
   user      User          @relation(fields: [userId], references: [id])
 
   @@map("task_logs")
 }
 
-// --------------------------------------------------------
-// INTEGRAÇÕES E LEGADO
-// --------------------------------------------------------
+// ========================================================
+// 7. GAMIFICAÇÃO (DIA A DIA)
+// ========================================================
+
+// O modelo do dia (Ex: Dia 1 - Beber Água)
+model DayTemplate {
+  id           String      @id @default(uuid())
+  
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id])
+  
+  dayNumber    Int
+  title        String
+  description  String
+  category     DayCategory
+  points       Int         @default(1)
+  requiresPhoto Boolean    @default(false)
+
+  @@unique([projectId, dayNumber], name: "projectId_dayNumber")
+  @@map("day_templates")
+}
+
+// O registro do usuário (A foto/prova que ele enviou)
+model ActionLog {
+  id            String       @id @default(uuid())
+  
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  
+  projectId     String
+  project       Project      @relation(fields: [projectId], references: [id])
+  
+  dayNumber     Int
+  status        ActionStatus @default(PENDENTE)
+  
+  photoUrl      String?      // A prova do usuário
+  notes         String?      // <--- AQUI VAI O COMENTÁRIO DO GESTOR
+  
+  completedAt   DateTime?
+  pointsAwarded Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([userId, projectId, dayNumber], name: "userId_projectId_dayNumber")
+  @@map("action_logs")
+}
+
+// Resumo dos pontos (Ranking)
+model RankingSummary {
+  userId         String
+  projectId      String
+  totalPoints    Int
+  completedDays  Int
+  completionRate Float
+  
+  user           User    @relation(fields: [userId], references: [id])
+  project        Project @relation(fields: [projectId], references: [id])
+
+  @@id([userId, projectId])
+  @@map("ranking_summaries")
+}
+
+// ========================================================
+// 8. INTEGRAÇÕES (WHATSAPP/MANYCHAT)
+// ========================================================
 
 model IntegrationSetting {
   id            String   @id @default(uuid())
@@ -260,60 +352,4 @@ model ManychatConnection {
 
   @@unique([provider, projectId])
   @@map("manychat_connections")
-}
-
-// Legado: Templates de Dia (Gamificação)
-model DayTemplate {
-  id            String      @id @default(uuid())
-  
-  projectId     String
-  project       Project     @relation(fields: [projectId], references: [id])
-  
-  dayNumber     Int
-  title         String
-  description   String
-  category      DayCategory
-  points        Int         @default(1)
-  requiresPhoto Boolean     @default(false)
-
-  @@unique([projectId, dayNumber], name: "projectId_dayNumber")
-  @@map("day_templates")
-}
-
-// Legado: Log de Ações do Usuário (Gamificação)
-model ActionLog {
-  id            String       @id @default(uuid())
-  
-  userId        String
-  user          User         @relation(fields: [userId], references: [id])
-  
-  projectId     String
-  project       Project      @relation(fields: [projectId], references: [id])
-  
-  dayNumber     Int
-  status        ActionStatus @default(PENDENTE)
-  photoUrl      String?
-  notes         String?
-  completedAt   DateTime?
-  pointsAwarded Int          @default(0)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@unique([userId, projectId, dayNumber], name: "userId_projectId_dayNumber")
-  @@map("action_logs")
-}
-
-// Legado: Resumo do Ranking
-model RankingSummary {
-  userId        String
-  projectId     String
-  totalPoints   Int
-  completedDays Int
-  completionRate Float
-  
-  user          User    @relation(fields: [userId], references: [id])
-  project       Project @relation(fields: [projectId], references: [id])
-
-  @@id([userId, projectId])
-  @@map("ranking_summaries")
 }

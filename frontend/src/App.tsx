@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -10,13 +9,17 @@ import LoginPage from './pages/auth/Login';
 // Layouts
 import MainLayout from './components/layouts/MainLayout'; 
 
-// Páginas
-import ServidorDashboard from './pages/servidor/dashboard';
-import ServidorRanking from './pages/servidor/ranking';
-import ServidorSettings from './pages/servidor/settings';
-import Support from './pages/servidor/support';
-import ServerTasks from './pages/servidor/tasks';
+// Páginas -  Usuário Comum
+import UserDashboard from './pages/user/dashboard';
+import UserRanking from './pages/user/ranking';
+import UserSettings from './pages/user/settings';
+import Support from './pages/user/support';
+import ServerTasks from './pages/user/tasks';
+
+// Páginas - Gestor
 import GestorDashboard from './pages/gestor/dashboard';
+
+// Páginas - Admin
 import AdminDashboard from './pages/admin/dashboard';
 import AdminUsersList from './pages/admin/users/List';
 import AdminCreateUser from './pages/admin/users/Create';
@@ -27,8 +30,10 @@ import ProjectTasks from './pages/admin/projects/Tasks';
 import Integrations from './pages/admin/integrations';
 import UserProfile from './pages/common/UserProfile'; 
 
+// Páginas - Organizações e Auditoria
 import OrganizationsList from './pages/admin/organizations/List';
 import OrganizationDetails from './pages/admin/organizations/Details';
+import UserProgress from './pages/admin/users/UserProgress';
 
 // Serviços
 import api from './services/api'; 
@@ -60,13 +65,13 @@ function DashboardWrapper() {
     return <Navigate to="/login" replace />;
   }
   
-  // === LÓGICA DE REDIRECIONAMENTO ATUALIZADA ===
+  // === LÓGICA DE REDIRECIONAMENTO ===
   const getDashboardPath = (role: string) => {
     switch(role) {
       case 'ADMIN': return '/dashboard/admin';
       case 'GESTOR_ORGANIZACAO': return '/dashboard/gestor';
-      case 'USUARIO': return '/dashboard/servidor'; // Usuário cai na tela de servidor
-      default: return '/dashboard/servidor';
+      case 'USUARIO': return '/dashboard/user'; 
+      default: return '/dashboard/user';
     }
   };
 
@@ -75,31 +80,40 @@ function DashboardWrapper() {
   const isExactDashboard = window.location.pathname === '/dashboard' || window.location.pathname === '/dashboard/';
 
   return (
-    // Agora passamos o objeto USER inteiro para o MainLayout
+    // Passamos o objeto USER para o MainLayout
     <MainLayout user={user}>
       <Routes>
         <Route path="configuracoes" element={<UserProfile />} />
 
-        {/* Rotas de Usuário (Antigo Servidor) */}
-        <Route path="servidor" element={<ServidorDashboard />} />
-        <Route path="servidor/ranking" element={<ServidorRanking />} />
-        <Route path="servidor/settings" element={<ServidorSettings />} />
-        <Route path="servidor/support" element={<Support />} />
-        <Route path="servidor/tarefas" element={<ServerTasks />} />
+        {/* Rotas de Usuário  */}
+        <Route path="user" element={<UserDashboard />} />
+        <Route path="user/ranking" element={<UserRanking />} />
+        <Route path="user/settings" element={<UserSettings />} />
+        <Route path="user/support" element={<Support />} />
+        <Route path="user/tarefas" element={<ServerTasks />} />
 
         {/* Rotas de Admin */}
         <Route path="admin" element={<AdminDashboard />} />
+        
+        {/* Admin - Usuários */}
         <Route path="admin/users" element={<AdminUsersList />} />
         <Route path="admin/users/create" element={<AdminCreateUser />} />
+        
+        {/* Admin - Projetos */}
         <Route path="admin/projects" element={<AdminProjectsList />} /> 
         <Route path="admin/projects/create" element={<AdminProjectCreate />} />
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
+        
+        {/* Admin - Integrações */}
         <Route path="admin/integrations" element={<Integrations />} />
 
         {/* === ROTAS DE ORGANIZAÇÃO === */}
         <Route path="admin/organizations" element={<OrganizationsList />} />
         <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
+        
+        {/* ✅ ROTA CORRIGIDA PARA A AUDITORIA/PROGRESSO DO USUÁRIO ✅ */}
+        <Route path="admin/organizations/:orgId/users/:userId" element={<UserProgress />} />
 
         {/* Rotas de Gestor */}
         <Route path="gestor" element={<GestorDashboard />} />

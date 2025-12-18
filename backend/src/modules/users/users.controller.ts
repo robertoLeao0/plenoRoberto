@@ -1,6 +1,6 @@
 import { 
-  Controller, Get, Post, Put, Patch, Body, UseGuards, 
-  Req, UseInterceptors, UploadedFile, Query 
+  Controller, Get, Post, Put, Patch, Body, Param, 
+  UseGuards, Req, UseInterceptors, UploadedFile, Query 
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -8,7 +8,6 @@ import { UsersService } from './users.service';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 
-// === CONFIGURAÇÃO PARA SALVAR AVATAR NO DISCO ===
 const storageConfig = diskStorage({
   destination: './uploads/avatars', 
   filename: (req, file, callback) => {
@@ -19,59 +18,64 @@ const storageConfig = diskStorage({
 });
 
 @Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // 1. LISTAR COM FILTROS (GET /users?organizationId=...)
-  @UseGuards(JwtAuthGuard)
+  @Post()
+  create(@Body() body: any) {
+    return this.usersService.create(body);
+  }
+
   @Get()
   findAll(@Query('organizationId') organizationId?: string) {
     return this.usersService.findAll({ organizationId });
   }
 
-  // 2. ATUALIZAR PERFIL + UPLOAD DE FOTO
-  @UseGuards(JwtAuthGuard)
+  @Get('managers')
+  findManagers() {
+    return this.usersService.findPotentialManagers();
+  }
+
+  @Get('me')
+  getMe(@Req() req: any) {
+    return this.usersService.findOne(req.user.id);
+  }
+
   @Put('profile')
   @UseInterceptors(FileInterceptor('avatar', { storage: storageConfig }))
   async updateProfile(
-    @Req() req,
-    @Body() body: { name: string },
+    @Req() req: any,
+    @Body() body: { name?: string, password?: string },
     @UploadedFile() file: Express.Multer.File
   ) {
     const userId = req.user.id;
-    
-    // Gera URL da imagem se houver arquivo
-    const avatarUrl = file 
-      ? `http://localhost:3000/uploads/avatars/${file.filename}` 
-      : undefined;
-
-    const updateData: any = { name: body.name };
+    const avatarUrl = file ? `http://localhost:3000/uploads/avatars/${file.filename}` : undefined;
+    const updateData: any = { ...body };
     if (avatarUrl) updateData.avatarUrl = avatarUrl;
-
     return this.usersService.update(userId, updateData);
   }
 
-  // 3. IMPORTAR EXCEL (Usa memória, não disco)
+  // === ROTA DE IMPORTAÇÃO ===
   @Post('import')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file')) // Sem storageConfig = salva na memória (buffer)
-  async importUsers(
-    @UploadedFile() file: Express.Multer.File,
-    @Body('organizationId') organizationId: string,
-    @Req() req,
-  ) {
-    // Se for Gestor, força o ID dele. Se for Admin, usa o que enviou.
-    const orgId = req.user.role === 'GESTOR_ORGANIZACAO' 
-      ? req.user.organizationId 
-      : organizationId;
-
-    return this.usersService.importUsers(file, orgId);
+  @UseInterceptors(FileInterceptor('file'))
+  async importUsers(@UploadedFile() file: Express.Multer.File) {
+    // Não precisa mais receber organizationId no Body, pois o TOKEN está na planilha
+    return this.usersService.importUsers(file);
   }
 
-  // 4. ADICIONAR EM MASSA
-  @UseGuards(JwtAuthGuard)
   @Patch('add-to-organization')
   async addMembers(@Body() body: { organizationId: string; userIds: string[] }) {
     return this.usersService.addUsersToOrganization(body.organizationId, body.userIds);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
+
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() body: any) {
+    return this.usersService.update(id, body);
   }
 }
