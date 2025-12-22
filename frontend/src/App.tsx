@@ -9,7 +9,7 @@ import LoginPage from './pages/auth/Login';
 // Layouts
 import MainLayout from './components/layouts/MainLayout'; 
 
-// Páginas -  Usuário Comum
+// Páginas - Usuário Comum
 import UserDashboard from './pages/user/dashboard';
 import UserRanking from './pages/user/ranking';
 import UserSettings from './pages/user/settings';
@@ -18,6 +18,9 @@ import ServerTasks from './pages/user/tasks';
 
 // Páginas - Gestor
 import GestorDashboard from './pages/gestor/dashboard';
+import GestorProjetosPage from './pages/gestor/projects';
+// IMPORTANTE: Certifique-se que o arquivo existe nesta pasta
+import GestorOrganizacaoPage from './pages/gestor/organizations'; 
 
 // Páginas - Admin
 import AdminDashboard from './pages/admin/dashboard';
@@ -31,7 +34,7 @@ import Integrations from './pages/admin/integrations';
 import UserProfile from './pages/common/UserProfile'; 
 import ProjectDetails from './pages/admin/projects/Details';
 
-// Páginas - Organizações e Auditoria
+// Páginas - Organizações e Auditoria (Admin)
 import OrganizationsList from './pages/admin/organizations/List';
 import OrganizationDetails from './pages/admin/organizations/Details';
 import UserProgress from './pages/admin/users/UserProgress';
@@ -66,7 +69,7 @@ function DashboardWrapper() {
     return <Navigate to="/login" replace />;
   }
   
-  // === LÓGICA DE REDIRECIONAMENTO ===
+  // Lógica de Redirecionamento Baseado no Cargo
   const getDashboardPath = (role: string) => {
     switch(role) {
       case 'ADMIN': return '/dashboard/admin';
@@ -77,23 +80,21 @@ function DashboardWrapper() {
   };
 
   const userBaseRoute = getDashboardPath(user.role);
-  // Verifica se estamos na raiz do dashboard para redirecionar
   const isExactDashboard = window.location.pathname === '/dashboard' || window.location.pathname === '/dashboard/';
 
   return (
-    // Passamos o objeto USER para o MainLayout
     <MainLayout user={user}>
       <Routes>
         <Route path="configuracoes" element={<UserProfile />} />
 
-        {/* Rotas de Usuário  */}
+        {/* --- ROTAS DE USUÁRIO --- */}
         <Route path="user" element={<UserDashboard />} />
         <Route path="user/ranking" element={<UserRanking />} />
         <Route path="user/settings" element={<UserSettings />} />
         <Route path="user/support" element={<Support />} />
         <Route path="user/tarefas" element={<ServerTasks />} />
 
-        {/* Rotas de Admin */}
+        {/* --- ROTAS DE ADMIN --- */}
         <Route path="admin" element={<AdminDashboard />} />
         
         {/* Admin - Usuários */}
@@ -110,17 +111,17 @@ function DashboardWrapper() {
         {/* Admin - Integrações */}
         <Route path="admin/integrations" element={<Integrations />} />
 
-        {/* === ROTAS DE ORGANIZAÇÃO === */}
+        {/* Admin - Organizações */}
         <Route path="admin/organizations" element={<OrganizationsList />} />
         <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
-        
-        {/* ✅ ROTA CORRIGIDA PARA A AUDITORIA/PROGRESSO DO USUÁRIO ✅ */}
         <Route path="admin/organizations/:orgId/users/:userId" element={<UserProgress />} />
 
-        {/* Rotas de Gestor */}
+        {/* --- ROTAS DE GESTOR (AQUI ESTÁ A CORREÇÃO) --- */}
         <Route path="gestor" element={<GestorDashboard />} />
+        <Route path="gestor/projetos" element={<GestorProjetosPage />} />
+        <Route path="gestor/organizacao" element={<GestorOrganizacaoPage />} />
 
-        {/* Redirecionamento Automático */}
+        {/* Redirecionamento Automático na Raiz */}
         {isExactDashboard && <Route path="/" element={<Navigate to={userBaseRoute} replace />} />}
         
       </Routes>

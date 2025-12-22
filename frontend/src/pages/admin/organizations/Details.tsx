@@ -1,14 +1,12 @@
-// src/pages/Organizations/details.tsx
-
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  ArrowLeft, Building2, MapPin, Mail, Ban, RefreshCcw, Trash2, 
-  ShieldAlert, X, Pencil, FileSpreadsheet, Key, Copy, Eye, EyeOff, 
-  UserPlus, Search, UserCog, Check
+import {
+  ArrowLeft, Building2, MapPin, Ban, RefreshCcw, Trash2,
+  ShieldAlert, X, Pencil, FileSpreadsheet, Key, Copy, Eye, EyeOff,
+  UserPlus, Search, UserCog, Check, Save
 } from 'lucide-react';
-import { toast, ToastContainer } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import api from '../../../services/api';
 
@@ -18,7 +16,8 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'MANAGER' | 'USER';
+  // Use o nome EXATO que está no banco de dados
+  role: 'ADMIN' | 'USUARIO' | 'GESTOR_ORGANIZACAO'; 
   avatarUrl?: string;
 }
 
@@ -31,7 +30,7 @@ interface OrganizationDetails {
   type: 'SYSTEM' | 'CUSTOMER';
   deletedAt: string | null;
   createdAt?: string;
-  importToken?: string; // <--- CORRIGIDO: O nome correto vindo do back é importToken
+  importToken?: string;
   managerId?: string;
   manager?: User;
   users: User[];
@@ -47,14 +46,18 @@ export default function Details() {
   const [showToken, setShowToken] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados dos Modais
+  // Modais
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isInactivateModalOpen, setIsInactivateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
-  // Novos Modais
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
+
+  // Form Edit
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editCnpj, setEditCnpj] = useState('');
 
   // === 1. BUSCAR DETALHES ===
   const { data: org, isLoading, isError } = useQuery<OrganizationDetails>({
@@ -66,11 +69,20 @@ export default function Details() {
     enabled: !!id,
   });
 
+  useEffect(() => {
+    if (org) {
+      setEditName(org.name || '');
+      setEditDescription(org.description || '');
+      setEditLocation(org.location || '');
+      setEditCnpj(org.cnpj || '');
+    }
+  }, [org]);
+
   // === 2. BUSCAR USUÁRIOS ===
   const { data: allUsers } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: async () => {
-      const response = await api.get('/users'); 
+      const response = await api.get('/users');
       return response.data;
     },
     enabled: isAddMemberModalOpen || isManagerModalOpen
@@ -78,33 +90,48 @@ export default function Details() {
 
   // === 3. MUTAÇÕES ===
 
-  // GERAR TOKEN (Ajustado para importToken)
-  const generateTokenMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.patch(`/organizations/${id}/token`);
-      console.log('RESPOSTA BACKEND:', response.data); 
-      return response.data;
+  const updateOrganizationMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string; location?: string; cnpj?: string }) => {
+      return api.patch(`/organizations/${id}`, data);
     },
     onSuccess: () => {
-      toast.success('Token gerado com sucesso!');
-      // Força recarregar os dados da tela
+      toast.success('Organização atualizada!');
+      setIsEditModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['organization', id] });
     },
-    onError: (error) => {
-      console.error('ERRO:', error);
-      toast.error('Erro ao gerar token.');
-    },
+    onError: () => toast.error('Erro ao atualizar organização.'),
   });
 
-  // Outras mutações...
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateOrganizationMutation.mutate({
+      name: editName,
+      description: editDescription,
+      location: editLocation,
+      cnpj: editCnpj
+    });
+  };
+
   const setManagerMutation = useMutation({
-    mutationFn: (userId: string) => api.patch(`/organizations/${id}/manager`, { managerId: userId }),
+    mutationFn: (userId: string) => api.patch(`/organizations/${id}`, { managerId: userId }),
     onSuccess: () => {
-      toast.success('Gestor atualizado!');
+      toast.success('Gestor definido com sucesso!');
       setIsManagerModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['organization', id] });
     },
     onError: () => toast.error('Erro ao definir gestor.'),
+  });
+
+  const generateTokenMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.patch(`/organizations/${id}/token`);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Token gerado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['organization', id] });
+    },
+    onError: () => toast.error('Erro ao gerar token.'),
   });
 
   const addMemberMutation = useMutation({
@@ -151,17 +178,12 @@ export default function Details() {
     },
   });
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.info('Conecte ao endpoint de update.');
-    setIsEditModalOpen(false);
-  };
-
-  // === FILTROS ===
   const potentialManagers = useMemo(() => {
     if (!allUsers) return [];
+    
     return allUsers.filter(u => 
-      (u.role === 'ADMIN' || u.role === 'MANAGER') && 
+      // Agora bate exatamente com o banco: GESTOR_ORGANIZACAO
+      (u.role === 'ADMIN' || u.role === 'GESTOR_ORGANIZACAO') && 
       u.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [allUsers, searchTerm]);
@@ -169,8 +191,8 @@ export default function Details() {
   const potentialMembers = useMemo(() => {
     if (!allUsers || !org) return [];
     const existingIds = org.users.map(u => u.id);
-    return allUsers.filter(u => 
-      !existingIds.includes(u.id) && 
+    return allUsers.filter(u =>
+      !existingIds.includes(u.id) &&
       u.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [allUsers, org, searchTerm]);
@@ -183,13 +205,12 @@ export default function Details() {
   const isActive = !org.deletedAt;
 
   return (
-    <div className="space-y-6 relative max-w-6xl mx-auto p-6">
-      <ToastContainer position="top-right" autoClose={3000} />
+    <div className="space-y-6 relative max-w-6xl mx-auto p-6 animate-in fade-in duration-300">
 
       {/* HEADER NAV */}
       <div className="flex items-center justify-between mb-2">
-        <Link 
-          to="/dashboard/admin/organizations" 
+        <Link
+          to="/dashboard/admin/organizations"
           className="flex items-center gap-1 text-gray-500 hover:text-blue-600 transition-colors"
         >
           <ArrowLeft size={18} /> Voltar
@@ -201,22 +222,20 @@ export default function Details() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-6">
           <div className="flex items-start gap-4">
-            <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-3xl shrink-0 ${
-              org.type === 'SYSTEM' ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'
-            }`}>
+            <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-3xl shrink-0 ${org.type === 'SYSTEM' ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'
+              }`}>
               <Building2 size={32} />
             </div>
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-gray-800">{org.name}</h1>
-                <span className={`text-xs px-2 py-0.5 rounded-full uppercase border ${
-                  isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-                }`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full uppercase border ${isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                  }`}>
                   {isActive ? 'Ativo' : 'Inativo'}
                 </span>
               </div>
               <p className="text-gray-500 mt-1">{org.description || 'Sem descrição.'}</p>
-              
+
               <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-600">
                 {org.location && <span className="flex items-center gap-1"><MapPin size={14} /> {org.location}</span>}
                 {org.cnpj && <span className="flex items-center gap-1"><FileSpreadsheet size={14} /> {org.cnpj}</span>}
@@ -236,10 +255,10 @@ export default function Details() {
               </button>
             ) : (
               <>
-                <button onClick={() => reactivateMutation.mutate()} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm font-medium hover:bg-blue-50">
+                <button onClick={() => reactivateMutation.mutate()} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 text-sm font-medium hover:bg-blue-100">
                   <RefreshCcw size={16} /> Reativar
                 </button>
-                <button onClick={() => setIsDeleteModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm font-medium hover:bg-red-50">
+                <button onClick={() => setIsDeleteModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm font-medium hover:bg-red-100">
                   <Trash2 size={16} /> Excluir
                 </button>
               </>
@@ -261,18 +280,18 @@ export default function Details() {
       </div>
 
       {/* CONTEÚDO */}
-      <div className="animate-in fade-in duration-300">
-        
+      <div>
+
         {/* ABA 1: VISÃO GERAL */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
+
             {/* GESTOR RESPONSÁVEL */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
-                    <ShieldAlert size={16} className="text-blue-500"/> Gestor Responsável
+                    <ShieldAlert size={16} className="text-blue-500" /> Gestor Responsável
                   </h3>
                   <button onClick={() => { setSearchTerm(''); setIsManagerModalOpen(true); }} className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline">
                     {org.manager ? 'Alterar' : 'Definir'}
@@ -296,22 +315,20 @@ export default function Details() {
               </div>
             </div>
 
-
             {/* TOKEN DE IMPORTAÇÃO */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-3">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                   <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
-                     <Key size={16} className="text-amber-500"/> Token de Importação
-                   </h3>
-                   <p className="text-xs text-gray-500 mt-1">
-                     Utilize este token para importar usuários.
-                   </p>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase flex items-center gap-2">
+                    <Key size={16} className="text-amber-500" /> Token de Importação
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Utilize este token para importar usuários automaticamente.
+                  </p>
                 </div>
-                <button 
+                <button
                   onClick={() => {
-                    // Verifica org.importToken em vez de org.apiKey
-                    if(!org.importToken || window.confirm('Gerar um novo token invalidará o anterior. Continuar?')) {
+                    if (!org.importToken || window.confirm('Gerar um novo token invalidará o anterior. Continuar?')) {
                       generateTokenMutation.mutate();
                     }
                   }}
@@ -323,7 +340,6 @@ export default function Details() {
                 </button>
               </div>
 
-              {/* Renderiza org.importToken aqui */}
               {org.importToken ? (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex-1 font-mono text-sm text-gray-600 truncate">
@@ -333,11 +349,11 @@ export default function Details() {
                     <button onClick={() => setShowToken(!showToken)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded" title="Visualizar">
                       {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
-                    <button 
+                    <button
                       onClick={() => {
                         navigator.clipboard.writeText(org.importToken!);
                         toast.success('Copiado!');
-                      }} 
+                      }}
                       className="p-1.5 text-gray-400 hover:text-blue-600 rounded" title="Copiar"
                     >
                       <Copy size={16} />
@@ -357,13 +373,13 @@ export default function Details() {
         {/* ABA 2: MEMBROS */}
         {activeTab === 'members' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-             <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                <h3 className="font-semibold text-gray-700">Usuários Vinculados</h3>
-                <button onClick={() => { setSearchTerm(''); setIsAddMemberModalOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">
-                  <UserPlus size={14} /> Adicionar Membro
-                </button>
-             </div>
-             <div className="divide-y divide-gray-100">
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-700">Usuários Vinculados</h3>
+              <button onClick={() => { setSearchTerm(''); setIsAddMemberModalOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">
+                <UserPlus size={14} /> Adicionar Membro
+              </button>
+            </div>
+            <div className="divide-y divide-gray-100">
               {org.users.length === 0 ? (
                 <div className="p-10 text-center flex flex-col items-center justify-center text-gray-500">
                   <div className="bg-gray-100 p-3 rounded-full mb-3"><UserCog size={24} /></div>
@@ -378,40 +394,41 @@ export default function Details() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{user.role}</span>
-                      <button onClick={() => { if(window.confirm('Remover usuário?')) removeMemberMutation.mutate(user.id); }} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                      <button onClick={() => { if (window.confirm('Remover usuário?')) removeMemberMutation.mutate(user.id); }} className="text-gray-400 hover:text-red-600 transition-colors p-1">
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
                 ))
               )}
-             </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* --- MODAIS DE SELEÇÃO E CRUD (Mantidos iguais) --- */}
+      {/* === MODAIS === */}
 
+      {/* 1. SELECIONAR GESTOR */}
       {isManagerModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-bold text-gray-800">Selecionar Gestor</h3>
-              <button onClick={() => setIsManagerModalOpen(false)}><X size={20} className="text-gray-400"/></button>
+              <button onClick={() => setIsManagerModalOpen(false)}><X size={20} className="text-gray-400" /></button>
             </div>
             <div className="p-4 border-b bg-gray-50 relative">
-               <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-               <input type="text" placeholder="Buscar por nome..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
+              <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input type="text" placeholder="Buscar por nome..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
             </div>
             <div className="overflow-y-auto p-2 space-y-1 flex-1 min-h-[200px]">
-              {potentialManagers.length === 0 ? <p className="p-4 text-center text-sm text-gray-500">Nenhum gestor encontrado.</p> :
+              {potentialManagers.length === 0 ? <p className="p-4 text-center text-sm text-gray-500">Nenhum gestor com perfil GESTOR_ORG encontrado.</p> :
                 potentialManagers.map(user => (
                   <button key={user.id} onClick={() => setManagerMutation.mutate(user.id)} className="w-full flex items-center justify-between p-3 hover:bg-blue-50 rounded-lg text-left">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">{user.name.charAt(0)}</div>
                       <div><p className="text-sm font-medium">{user.name}</p><p className="text-xs text-gray-500">{user.role}</p></div>
                     </div>
-                    {org.managerId === user.id && <Check size={16} className="text-blue-600"/>}
+                    {org.managerId === user.id && <Check size={16} className="text-blue-600" />}
                   </button>
                 ))
               }
@@ -420,16 +437,17 @@ export default function Details() {
         </div>
       )}
 
+      {/* 2. ADICIONAR MEMBRO (MANTIDO) */}
       {isAddMemberModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-bold text-gray-800">Adicionar Membro</h3>
-              <button onClick={() => setIsAddMemberModalOpen(false)}><X size={20} className="text-gray-400"/></button>
+              <button onClick={() => setIsAddMemberModalOpen(false)}><X size={20} className="text-gray-400" /></button>
             </div>
             <div className="p-4 border-b bg-gray-50 relative">
-               <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-               <input type="text" placeholder="Buscar usuário..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
+              <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input type="text" placeholder="Buscar usuário..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
             </div>
             <div className="overflow-y-auto p-2 space-y-1 flex-1 min-h-[200px]">
               {potentialMembers.length === 0 ? <p className="p-4 text-center text-sm text-gray-500">Nenhum usuário disponível.</p> :
@@ -439,7 +457,7 @@ export default function Details() {
                       <div className="w-8 h-8 rounded-full bg-gray-200 group-hover:bg-green-100 flex items-center justify-center font-bold text-xs text-gray-600 group-hover:text-green-700">{user.name.charAt(0)}</div>
                       <div><p className="text-sm font-medium">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div>
                     </div>
-                    <UserPlus size={16} className="text-gray-300 group-hover:text-green-600"/>
+                    <UserPlus size={16} className="text-gray-300 group-hover:text-green-600" />
                   </button>
                 ))
               }
@@ -448,10 +466,98 @@ export default function Details() {
         </div>
       )}
 
-      {/* Modais de Edição/Inativar/Excluir (Mantidos simplificados) */}
-      {isEditModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white p-6 rounded-xl w-full max-w-lg"><h3 className="font-bold mb-4">Editar</h3><form onSubmit={handleEditSubmit}><input className="border w-full p-2 rounded mb-4" defaultValue={org.name} /><div className="flex justify-end gap-2"><button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border rounded">Cancelar</button><button className="px-4 py-2 bg-blue-600 text-white rounded">Salvar</button></div></form></div></div>}
-      {isInactivateModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white p-6 rounded-xl w-full max-w-sm"><h3 className="font-bold mb-2">Inativar?</h3><div className="flex gap-2"><button onClick={() => setIsInactivateModalOpen(false)} className="flex-1 border p-2 rounded">Cancelar</button><button onClick={() => inactivateMutation.mutate()} className="flex-1 bg-amber-600 text-white p-2 rounded">Sim</button></div></div></div>}
-      {isDeleteModalOpen && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white p-6 rounded-xl w-full max-w-sm"><h3 className="font-bold text-red-600 mb-2">Excluir?</h3><div className="flex gap-2"><button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 border p-2 rounded">Cancelar</button><button onClick={() => deletePermanentMutation.mutate()} className="flex-1 bg-red-600 text-white p-2 rounded">Sim</button></div></div></div>}
+      {/* 3. EDITAR ORGANIZAÇÃO (NOVO) */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-lg shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-xl text-gray-800">Editar Organização</h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                <input
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                <textarea
+                  className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                  rows={3}
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Localização</label>
+                  <input
+                    className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editLocation}
+                    onChange={e => setEditLocation(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
+                  <input
+                    className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editCnpj}
+                    onChange={e => setEditCnpj(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">Cancelar</button>
+                <button
+                  type="submit"
+                  disabled={updateOrganizationMutation.isPending}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center gap-2"
+                >
+                  <Save size={18} /> {updateOrganizationMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. INATIVAR */}
+      {isInactivateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-sm shadow-xl">
+            <h3 className="font-bold text-lg mb-2 text-amber-700 flex items-center gap-2"><Ban size={20} /> Inativar Organização?</h3>
+            <p className="text-gray-600 mb-6 text-sm">O acesso será bloqueado temporariamente.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setIsInactivateModalOpen(false)} className="flex-1 border p-2.5 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => inactivateMutation.mutate()} className="flex-1 bg-amber-600 text-white p-2.5 rounded-lg hover:bg-amber-700 font-bold">Inativar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. EXCLUIR */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-sm shadow-xl text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h3 className="font-bold text-red-600 text-lg mb-2">Excluir Definitivamente?</h3>
+            <p className="text-gray-600 mb-6 text-sm">Esta ação não pode ser desfeita. Todos os dados serão perdidos.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 border p-2.5 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => deletePermanentMutation.mutate()} className="flex-1 bg-red-600 text-white p-2.5 rounded-lg hover:bg-red-700 font-bold">Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
