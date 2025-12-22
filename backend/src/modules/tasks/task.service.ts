@@ -7,28 +7,33 @@ import { ActionStatus } from '@prisma/client';
 export class TaskService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // =========================================================
-  // CRIAR TAREFA
-  // =========================================================
   async create(data: CreateTaskDto) {
     try {
-      console.log("=== [DEBUG] TENTANDO CRIAR TAREFA ===");
-      console.log("Dados:", JSON.stringify(data, null, 2));
+      const { organizationIds = [], projectId, ...rest } = data;
+      let orgsToConnect = [...organizationIds];
 
-      const { organizationIds, ...rest } = data;
+      // Herança automática de Organizações do Projeto
+      if (projectId) {
+        const project = await this.prisma.project.findUnique({
+          where: { id: projectId },
+          include: { organizations: true }
+        });
+
+        if (project && project.organizations.length > 0) {
+          const projectOrgIds = project.organizations.map(org => org.id);
+          orgsToConnect = [...new Set([...orgsToConnect, ...projectOrgIds])];
+        }
+      }
 
       const newTask = await this.prisma.task.create({
         data: {
           ...rest,
-          status: 'PENDING', 
-          
-          // Garante que as datas sejam objetos Date
-          startAt: new Date(data.startAt),
-          endAt: new Date(data.endAt),
-
-          // Conecta as organizações (Many-to-Many)
+          projectId, 
+          status: 'PENDING',
+          startAt: data.startAt ? new Date(data.startAt) : undefined,
+          endAt: data.endAt ? new Date(data.endAt) : undefined,
           organizations: {
-            connect: organizationIds.map((id) => ({ id })),
+            connect: orgsToConnect.map((id) => ({ id })),
           },
         },
         include: {
@@ -36,32 +41,21 @@ export class TaskService {
         },
       });
 
-      console.log("=== [DEBUG] TAREFA CRIADA COM SUCESSO! ID:", newTask.id);
       return newTask;
 
     } catch (error: any) {
-      console.error("=== [ERRO] FALHA AO CRIAR TAREFA ===");
-      console.error(error);
       throw new InternalServerErrorException(`Erro ao salvar tarefa: ${error.message}`);
     }
   }
 
-  // =========================================================
-  // MINHAS TAREFAS (COM DEBUG PARA DESCOBRIR O ERRO)
-  // =========================================================
   async findMyTasks(organizationId: string) {
-    console.log(`=== [DEBUG] Buscando tarefas para a Organização ID: ${organizationId} ===`);
-
     try {
-      // Busca tarefas ativas vinculadas à organização do usuário
-      const tasks = await this.prisma.task.findMany({
+      return await this.prisma.task.findMany({
         where: {
-          isActive: true, 
+          isActive: true,
           project: {
-            deletedAt: null // O Projeto deve estar ativo
+            deletedAt: null
           },
-          // FILTRO IMPORTANTE:
-          // A tarefa precisa ter sido atribuída para a organização do usuário
           organizations: {
             some: {
               id: organizationId 
@@ -81,22 +75,14 @@ export class TaskService {
           }
         },
         orderBy: {
-          startAt: 'asc' // Mais antigas primeiro
+          startAt: 'asc'
         }
       });
-
-      console.log(`=== [DEBUG] Encontradas ${tasks.length} tarefas para este usuário.`);
-      return tasks;
-
     } catch (error) {
-      console.error("Erro ao buscar minhas tarefas:", error);
       return [];
     }
   }
 
-  // =========================================================
-  // LISTAR POR PROJETO (USADO NO PAINEL ADMIN)
-  // =========================================================
   async findAllByProject(projectId: string) {
     return await this.prisma.task.findMany({
       where: { projectId },
@@ -109,28 +95,20 @@ export class TaskService {
     });
   }
 
-  // =========================================================
-  // BUSCAR UMA TAREFA ESPECÍFICA
-  // =========================================================
   async findOne(id: string) {
     return await this.prisma.task.findUnique({
       where: { id },
-      include: { organizations: true },
+      include: { organizations: true, project: true },
     });
   }
 
-  // =========================================================
-  // ATUALIZAR TAREFA
-  // =========================================================
   async update(id: string, data: any) {
     const { organizationIds, startAt, endAt, ...rest } = data;
     
-    // Tratamento de Datas
     const dateUpdates: any = {};
     if (startAt) dateUpdates.startAt = new Date(startAt);
     if (endAt) dateUpdates.endAt = new Date(endAt);
 
-    // Tratamento de Organizações (Substitui as antigas pelas novas)
     const orgUpdates = organizationIds 
       ? { set: organizationIds.map((orgId: string) => ({ id: orgId })) } 
       : undefined;
@@ -142,32 +120,22 @@ export class TaskService {
     });
   }
 
-  // =========================================================
-  // REMOVER TAREFA
-  // =========================================================
   async remove(id: string) {
     return await this.prisma.task.delete({ where: { id } });
   }
 
-  // =========================================================
-  // MÉTODOS LEGADOS / AUDITORIA (MANTIDOS PARA COMPATIBILIDADE)
-  // =========================================================
   async getUserJornada(userId: string, organizationId: string) {
-    // Mantendo a lógica caso você use essa rota antiga em outro lugar
-    const projects = await this.prisma.project.findMany({
-      where: {
-        organizations: { some: { id: organizationId } },
-        subscribers: { some: { userId } } 
-      },
-      include: { dayTemplates: { orderBy: { dayNumber: 'asc' } } }
-    });
-    return []; // Retorno simplificado conforme seu snippet anterior
+    return []; 
   }
 
   async evaluateAction(logId: string, status: ActionStatus, notes?: string) {
     return this.prisma.actionLog.update({
       where: { id: logId },
-      data: { status, notes, completedAt: status === 'APROVADO' ? new Date() : undefined }
+      data: { 
+        status, 
+        notes, 
+        completedAt: status === 'APROVADO' ? new Date() : undefined 
+      }
     });
   }
 }

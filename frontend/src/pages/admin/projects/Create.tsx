@@ -96,8 +96,8 @@ export default function CreateProject() {
            <Plus size={28} />
         </div>
         <div>
-           <h1 className="text-2xl font-bold text-gray-800">Novo Projeto (Jornada)</h1>
-           <p className="text-gray-500 text-sm mt-1">Crie uma nova jornada para múltiplas organizações.</p>
+           <h1 className="text-2xl font-bold text-gray-800">Novo Projeto</h1>
+           <p className="text-gray-500 text-sm mt-1">Crie um novo projeto para múltiplas organizações.</p>
         </div>
       </div>
 
@@ -144,7 +144,7 @@ export default function CreateProject() {
             )}
           </div>
           <p className="text-xs text-gray-500 mt-2 ml-1">
-            * Selecione todas as empresas que participarão desta jornada.
+            * Selecione todas as empresas que participarão deste projeto.
           </p>
         </div>
 
@@ -152,7 +152,7 @@ export default function CreateProject() {
 
         {/* Inputs de Texto e Data (Iguais ao anterior) */}
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-1">Nome da Jornada <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-bold text-gray-700 mb-1">Nome<span className="text-red-500">*</span></label>
           <input required type="text" className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Jornada 2025" value={name} onChange={e => setName(e.target.value)} />
         </div>
 

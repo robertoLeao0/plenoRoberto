@@ -2,8 +2,6 @@ import { Controller, Get, Post, Body, Param, Delete, Patch, Query, UseGuards, Re
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ActionStatus } from '@prisma/client';
-
-// Ajuste este caminho conforme sua estrutura real (usei o mesmo do ProjectsController)
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'; 
 
 @Controller('tasks')
@@ -16,19 +14,17 @@ export class TaskController {
     return this.taskService.create(createTaskDto);
   }
 
-  // === NOVA ROTA: MINHAS TAREFAS (USUÁRIO) ===
   @Get('my-tasks')
   findMyTasks(@Request() req) {
     const user = req.user; 
     
-    // Se o usuário não tiver organização, retorna lista vazia
+    // Se o token não tiver organização, retorna vazio por segurança
     if (!user || !user.organizationId) {
         return [];
     }
 
     return this.taskService.findMyTasks(user.organizationId);
   }
-  // ============================================
 
   @Get()
   findAll(@Query('projectId') projectId: string) {
@@ -51,7 +47,6 @@ export class TaskController {
     return this.taskService.remove(id);
   }
 
-  // Rotas de Auditoria Legado
   @Get('audit/user/:userId/org/:orgId')
   getUserJornada(@Param('userId') userId: string, @Param('orgId') orgId: string) {
     return this.taskService.getUserJornada(userId, orgId);

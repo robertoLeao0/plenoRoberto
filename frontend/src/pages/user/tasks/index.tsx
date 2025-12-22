@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Lock, Unlock, Clock, FileText, ChevronRight, Calendar 
+  Lock, Unlock, ChevronRight, Calendar, FolderOpen, ArrowLeft, CheckCircle2 
 } from 'lucide-react';
-// IMPORTANTE: Ajuste a quantidade de "../" até achar a pasta services
-// Se estiver em src/pages/user/tasks/index.tsx, são 3 níveis:
+import { format, parseISO, isFuture } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { toast } from 'react-toastify';
 import api from '../../../services/api';
 
 interface MyTask {
@@ -20,7 +22,9 @@ interface MyTask {
 }
 
 export default function UserTasks() {
-  const [now] = useState(new Date());
+  const navigate = useNavigate();
+  // Estado para controlar qual projeto está selecionado (se null, mostra a lista de projetos)
+  const [selectedProjectName, setSelectedProjectName] = useState<string | null>(null);
 
   // Busca tarefas da API
   const { data: tasks, isLoading } = useQuery<MyTask[]>({
@@ -29,87 +33,164 @@ export default function UserTasks() {
       const response = await api.get('/tasks/my-tasks');
       return response.data;
     },
-    refetchInterval: 60000, // Atualiza a cada 1 min
+    refetchInterval: 60000, 
   });
+
+  // === 1. AGRUPAR TAREFAS POR PROJETO ===
+  const projectsList = useMemo(() => {
+    if (!tasks) return [];
+    // Cria uma lista única de nomes de projetos
+    const uniqueProjects = Array.from(new Set(tasks.map(t => t.project?.name || 'Geral')));
+    return uniqueProjects;
+  }, [tasks]);
+
+  // === 2. FILTRAR TAREFAS DO PROJETO SELECIONADO ===
+  const filteredTasks = useMemo(() => {
+    if (!tasks || !selectedProjectName) return [];
+    
+    return tasks
+      .filter(t => (t.project?.name || 'Geral') === selectedProjectName)
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()); // Garante ordem por data
+  }, [tasks, selectedProjectName]);
+
+  // Função de Clique na Tarefa
+  const handleTaskClick = (task: MyTask) => {
+    const startDate = parseISO(task.startAt);
+    
+    if (isFuture(startDate)) {
+      const dateString = format(startDate, "dd 'de' MMMM", { locale: ptBR });
+      toast.info(`🔒 Tarefa liberada apenas dia ${dateString}.`);
+      return;
+    }
+    
+    navigate(`/dashboard/user/tasks/${task.id}`); 
+  };
 
   if (isLoading) {
     return <div className="p-10 text-center text-gray-500">Carregando jornada...</div>;
   }
 
+  // === VISÃO 1: LISTA DE PROJETOS (PASTAS) ===
+  if (!selectedProjectName) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-800">Meus Projetos</h1>
+          <p className="text-gray-500">Selecione uma jornada para ver suas tarefas.</p>
+        </div>
+
+        <div className="space-y-4">
+          {(!tasks || tasks.length === 0) && (
+             <div className="py-20 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-400">
+                <p>Nenhuma tarefa atribuída à sua organização ainda.</p>
+             </div>
+          )}
+
+          {projectsList.map((projectName) => {
+            // Conta quantas tarefas tem nesse projeto
+            const count = tasks?.filter(t => (t.project?.name || 'Geral') === projectName).length;
+
+            return (
+              <div 
+                key={projectName}
+                onClick={() => setSelectedProjectName(projectName)}
+                className="group bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex items-center justify-between"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <FolderOpen size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-800">{projectName}</h3>
+                    <p className="text-sm text-gray-500">{count} tarefas disponíveis</p>
+                  </div>
+                </div>
+                
+                <ChevronRight className="text-gray-300 group-hover:text-blue-600 transition-colors" />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // === VISÃO 2: LISTA DE TAREFAS DO PROJETO (ARQUIVOS) ===
   return (
-    <div className="p-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+    <div className="p-6 max-w-4xl mx-auto animate-in slide-in-from-right duration-500">
       
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Minha Jornada</h1>
-        <p className="text-gray-500">Acompanhe suas atividades diárias.</p>
+      {/* Botão Voltar */}
+      <button 
+        onClick={() => setSelectedProjectName(null)}
+        className="flex items-center text-gray-500 hover:text-blue-600 mb-6 transition-colors group"
+      >
+        <div className="p-1 rounded-full group-hover:bg-blue-50 mr-2">
+          <ArrowLeft size={20} />
+        </div>
+        <span className="font-medium">Voltar para Projetos</span>
+      </button>
+
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">{selectedProjectName}</h1>
+          <p className="text-gray-500">Cronograma de atividades</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Caso a lista esteja vazia */}
-        {(!tasks || tasks.length === 0) && (
-           <div className="col-span-full py-20 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-400">
-              <p>Nenhuma tarefa atribuída à sua organização ainda.</p>
-           </div>
-        )}
-
-        {tasks?.map((task) => {
-          const startDate = new Date(task.startAt);
-          // Lógica: Se a data de início for maior que AGORA, está BLOQUEADO
-          const isLocked = startDate > now;
+      <div className="space-y-4">
+        {filteredTasks.map((task) => {
+          const startDate = parseISO(task.startAt);
+          const isLocked = isFuture(startDate);
           
-          const dateString = startDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-          const timeString = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          // Formatação simples: "10 de dezembro"
+          const dateString = format(startDate, "dd 'de' MMMM", { locale: ptBR });
 
           return (
             <div 
-              key={task.id} 
+              key={task.id}
+              onClick={() => handleTaskClick(task)}
               className={`
-                relative rounded-2xl p-6 transition-all duration-300 border flex flex-col justify-between min-h-[180px]
+                relative flex items-center p-4 rounded-xl border transition-all duration-200
                 ${isLocked 
-                  ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-80' 
-                  : 'bg-white border-blue-100 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer group'
+                  ? 'bg-gray-50 border-gray-200 cursor-not-allowed opacity-75' 
+                  : 'bg-white border-blue-100 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer'
                 }
               `}
             >
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                   <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${isLocked ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
-                      {task.project.name}
-                   </span>
-                   <div className={`p-2 rounded-full ${isLocked ? 'bg-gray-200 text-gray-400' : 'bg-green-100 text-green-600'}`}>
-                      {isLocked ? <Lock size={18} /> : <Unlock size={18} />}
-                   </div>
+              {/* Ícone Lateral */}
+              <div className={`
+                h-10 w-10 rounded-lg flex items-center justify-center mr-4 shrink-0 border
+                ${isLocked 
+                  ? 'bg-gray-100 border-gray-200 text-gray-400' 
+                  : 'bg-blue-50 border-blue-100 text-blue-600'
+                }
+              `}>
+                {isLocked ? <Lock size={18} /> : <CheckCircle2 size={20} />}
+              </div>
+
+              {/* Informações */}
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-bold uppercase tracking-wide ${isLocked ? 'text-gray-400' : 'text-blue-600'}`}>
+                    {isLocked ? 'Em Breve' : 'Disponível'}
+                  </span>
+                  
+                  {/* Data formatada simplificada */}
+                  <div className="flex items-center text-xs text-gray-400 font-medium">
+                    <Calendar size={12} className="mr-1" />
+                    {dateString}
+                  </div>
                 </div>
 
-                <h3 className={`font-bold text-lg mb-2 ${isLocked ? 'text-gray-500' : 'text-gray-800 group-hover:text-blue-700'}`}>
+                <h3 className={`text-base font-semibold truncate ${isLocked ? 'text-gray-500' : 'text-gray-800'}`}>
                   {task.title}
                 </h3>
               </div>
 
-              {/* RODAPÉ DO CARD */}
-              {isLocked ? (
-                // === BLOQUEADO ===
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                   <div className="flex items-center gap-2 text-gray-500 mb-1">
-                      <Clock size={16} />
-                      <span className="text-sm font-medium">Disponível em:</span>
-                   </div>
-                   <p className="text-sm font-bold text-gray-700 pl-6">
-                      {dateString} às {timeString}
-                   </p>
-                </div>
-              ) : (
-                // === LIBERADO ===
-                <div className="mt-4 space-y-3">
-                   <p className="text-sm text-gray-500 line-clamp-2">
-                      Toque para ver os detalhes e enviar sua comprovação.
-                   </p>
-                   <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-blue-600">
-                      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                        <FileText size={14}/> Acessar
-                      </span>
-                      <ChevronRight size={18}/>
-                   </div>
+              {/* Seta se liberado */}
+              {!isLocked && (
+                <div className="text-gray-300">
+                  <ChevronRight size={20} />
                 </div>
               )}
             </div>
