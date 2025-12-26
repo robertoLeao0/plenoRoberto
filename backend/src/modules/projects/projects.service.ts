@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { Prisma } from '@prisma/client';
+import { UserRole } from '../../common/enums/role.enum'; 
 
 @Injectable()
 export class ProjectsService {
@@ -17,10 +18,7 @@ export class ProjectsService {
     return this.prisma.project.create({
       data: {
         ...rest,
-        // Define deletedAt baseado no isActive
         deletedAt: isActive === false ? new Date() : null,
-        
-        // Vínculo Many-to-Many
         organizations: organizationIds?.length
           ? {
               connect: organizationIds.map((id: string) => ({ id })),
@@ -34,27 +32,34 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // LISTAR TODOS (Com Filtros)
+  // LISTAR TODOS (Limpo)
   // ==================================================================
-  async findAll(filters: { organizationId?: string; isActive?: boolean } = {}) {
+  async findAll(user: any, filters: { organizationId?: string; isActive?: boolean } = {}) {
     const where: Prisma.ProjectWhereInput = {};
 
-    // Filtro Ativo/Inativo
+    // 1. Filtro por STATUS
     if (filters.isActive === true) {
       where.deletedAt = null;
     } else if (filters.isActive === false) {
       where.deletedAt = { not: null };
     }
-    // IMPORTANTE: Se isActive for undefined, NÃO adiciona filtro de deletedAt
-    // Assim, retorna tudo para o admin filtrar no front
 
-    // Filtro Organização
-    if (filters.organizationId) {
-      where.organizations = {
-        some: {
-          id: filters.organizationId,
-        },
-      };
+    // 2. Segurança por CARGO
+    if (user.role === UserRole.GESTOR_ORGANIZACAO) {
+      if (user.organizationId) {
+        where.organizations = {
+          some: { id: user.organizationId }
+        };
+      } else {
+        return []; // Gestor sem organização não vê nada
+      }
+    } 
+    else if (user.role === UserRole.ADMIN) {
+      if (filters.organizationId) {
+        where.organizations = {
+          some: { id: filters.organizationId }
+        };
+      }
     }
 
     return this.prisma.project.findMany({
@@ -64,7 +69,7 @@ export class ProjectsService {
           select: { id: true, name: true },
         },
         _count: {
-          select: { tasks: true, subscribers: true },
+          select: { tasks: true, subscribers: true }, // Subscribers são os membros
         },
       },
       orderBy: {
@@ -81,9 +86,7 @@ export class ProjectsService {
       where: { id },
       include: {
         organizations: true,
-        dayTemplates: {
-          orderBy: { dayNumber: 'asc' },
-        },
+        // Ajuste aqui conforme seus relacionamentos reais, se tiver dayTemplates
         tasks: {
           take: 5,
           orderBy: { createdAt: 'desc' },
@@ -96,6 +99,61 @@ export class ProjectsService {
     }
 
     return project;
+  }
+
+  // ==================================================================
+  // NOVO: BUSCAR DETALHES E PROGRESSO DA EQUIPE
+  // ==================================================================
+  async findProjectTeamProgress(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        // No seu schema novo, members são 'subscribers' ou via Organization?
+        // Vou assumir que você pega os usuários da Organização vinculada ao projeto
+        // OU se tiver um campo direto members no projeto.
+        // Dado o schema da Organização, os usuários estão na Org.
+        organizations: {
+            include: {
+                users: true 
+            }
+        },
+        _count: {
+          select: { tasks: true }
+        }
+      }
+    });
+  
+    if (!project) {
+      throw new NotFoundException('Projeto não encontrado');
+    }
+
+    // Lógica para extrair os membros (já que o projeto pode ter várias organizações)
+    // Aqui pegamos todos os usuários de todas as organizações vinculadas a esse projeto
+    const allMembers = project.organizations.flatMap(org => org.users);
+
+    // Remove duplicatas (caso um user esteja em 2 orgs do mesmo projeto)
+    const uniqueMembers = [...new Map(allMembers.map(item => [item.id, item])).values()];
+  
+    const membersWithProgress = uniqueMembers.map(member => ({
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      avatarUrl: member.avatarUrl,
+      phone: member.phone,
+      tasksCompleted: 0, // Implementar contagem real depois via TaskLog
+      totalTasks: project._count.tasks,
+      status: 'PENDENTE'
+    }));
+  
+    return {
+      project: {
+        id: project.id,
+        name: project.name,
+        // deadline: project.deadline, // Se tiver deadline no model
+        status: 'active', // Ou pegar do deletedAt
+      },
+      members: membersWithProgress
+    };
   }
 
   // ==================================================================
@@ -141,7 +199,7 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // REATIVAR (Novo)
+  // REATIVAR
   // ==================================================================
   async reactivate(id: string) {
     await this.findOne(id);
@@ -152,7 +210,7 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // EXCLUIR PERMANENTEMENTE (Novo)
+  // EXCLUIR PERMANENTEMENTE
   // ==================================================================
   async deletePermanent(id: string) {
     return this.prisma.project.delete({
@@ -167,8 +225,7 @@ export class ProjectsService {
     return this.prisma.task.findMany({
       where: { projectId },
       orderBy: [
-        { sendAt: 'asc' }, 
-        { createdAt: 'asc' }
+        { createdAt: 'asc' } 
       ], 
     });
   }

@@ -15,21 +15,20 @@ interface Project {
 
 export default function GestorProjetosPage() {
   
-  // --- AQUI ESTÁ A MUDANÇA ---
+  // Busca os projetos na API
   const { data: projects, isLoading, error } = useQuery({
     queryKey: ['gestor-projects-list'],
     queryFn: async () => {
-      // Tenta buscar os dados reais
-      console.log('🔍 Tentando buscar projetos na API...');
+      console.log('🔍 [FRONTEND] Buscando projetos na rota /projects...');
       
-      // IMPORTANTE: Verifique se essa rota '/gestor/projects' existe no seu Backend.
-      // Se no seu backend a rota for '/projects' ou '/users/me/projects', mude aqui!
-      const { data } = await api.get<Project[]>('/gestor/projects'); 
+      // CORREÇÃO PRINCIPAL: Chamando a rota padrão '/projects'
+      // O Backend vai decidir o que retornar baseado no token do usuário.
+      const { data } = await api.get<Project[]>('/projects'); 
       
-      console.log('✅ Projetos recebidos:', data);
+      console.log('✅ [FRONTEND] Projetos recebidos:', data);
       return data;
     },
-    retry: 1, // Tenta apenas 1 vez se der erro
+    retry: 1, // Tenta apenas 1 vez se der erro para não flodar o console
   });
 
   // Função auxiliar para cor do status
@@ -60,13 +59,18 @@ export default function GestorProjetosPage() {
 
       {/* Exibir Erro se houver */}
       {error && (
-        <div className="bg-red-50 p-4 rounded text-red-600 border border-red-200">
-          Erro ao carregar projetos. Verifique o console (F12).
+        <div className="bg-red-50 p-4 rounded text-red-600 border border-red-200 flex flex-col gap-2">
+          <strong>Erro ao carregar projetos.</strong>
+          <span className="text-sm">Verifique se você está logado corretamente e se o backend está rodando.</span>
         </div>
       )}
 
       {isLoading ? (
-        <div className="text-slate-500 animate-pulse">Carregando projetos da API...</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+           {[1, 2, 3].map(i => (
+             <div key={i} className="h-48 bg-slate-200 rounded-xl"></div>
+           ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects?.map((project) => (
@@ -95,7 +99,7 @@ export default function GestorProjetosPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span>👥</span>
-                    <span>Equipe: <span className="font-semibold text-slate-800">{project.teamSize} membros</span></span>
+                    <span>Equipe: <span className="font-semibold text-slate-800">{project.teamSize || 0} membros</span></span>
                   </div>
                 </div>
               </div>
@@ -103,25 +107,26 @@ export default function GestorProjetosPage() {
               <div className="mt-6 pt-4 border-t border-slate-100">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-slate-500">Progresso</span>
-                  <span className="font-bold text-slate-700">{project.progress}%</span>
+                  <span className="font-bold text-slate-700">{project.progress || 0}%</span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                   <div 
                     className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
-                    style={{ width: `${project.progress}%` }}
+                    style={{ width: `${project.progress || 0}%` }}
                   ></div>
                 </div>
-                <button className="w-full mt-4 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-sm transition-colors border border-slate-200">
+                
+                <button className="w-full mt-4 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-sm transition-colors border border-slate-200 cursor-pointer">
                   Ver Detalhes
                 </button>
               </div>
             </div>
           ))}
 
-          {(!projects || projects.length === 0) && (
+          {(!projects || projects.length === 0) && !error && (
             <div className="col-span-full py-12 text-center bg-white rounded-lg border border-dashed border-slate-300">
-              <p className="text-slate-500 text-lg">Você ainda não tem projetos ativos.</p>
-              <p className="text-sm text-slate-400 mt-2">Verifique se o backend está retornando dados na rota correta.</p>
+              <p className="text-slate-500 text-lg">Você ainda não tem projetos ativos nesta organização.</p>
+              <p className="text-sm text-slate-400 mt-2">Se você acabou de ser adicionado, tente sair e logar novamente.</p>
             </div>
           )}
         </div>

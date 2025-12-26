@@ -1,76 +1,86 @@
-import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Param, 
+  Delete, 
+  Query, 
+  UseGuards 
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/role.enum';
 
 @Controller('organizations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) { }
+  constructor(private readonly organizationsService: OrganizationsService) {}
 
-  // 1. LISTAR (Aceita ?status=active ou ?status=inactive)
-  @Get()
-  findAll(@Query('status') status?: 'active' | 'inactive') {
-    // Se não enviar nada, assume 'active'
-    return this.organizationsService.findAll(status || 'active');
+  // Criar Organização (Apenas ADMIN)
+  @Post()
+  @Roles(UserRole.ADMIN)
+  create(@Body() createOrganizationDto: CreateOrganizationDto) {
+    return this.organizationsService.create(createOrganizationDto);
   }
 
-  // 2. BUSCAR UMA
+  // Listar todas (Apenas ADMIN vê todas, ou podemos ajustar filtro depois)
+  @Get()
+  @Roles(UserRole.ADMIN) 
+  findAll(@Query('status') status?: 'active' | 'inactive') {
+    return this.organizationsService.findAll(status);
+  }
+
+  // Detalhes de uma (Admin ou Gestor da própria)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.organizationsService.findOne(id);
   }
 
-  // 3. CRIAR
-  @Post()
-  create(@Body() body: any) {
-    return this.organizationsService.create(body);
-  }
-
-  // 4. ATUALIZAR DADOS
+  // Atualizar (Apenas ADMIN define gestores e edita dados)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.organizationsService.update(id, body);
+  @Roles(UserRole.ADMIN)
+  update(@Param('id') id: string, @Body() updateOrganizationDto: UpdateOrganizationDto) {
+    return this.organizationsService.update(id, updateOrganizationDto);
   }
 
-  // 5. INATIVAR (Soft Delete) - Usado no botão "Inativar"
+  // Gerar novo Token de Importação
+  @Patch(':id/token')
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
+  generateToken(@Param('id') id: string) {
+    return this.organizationsService.generateToken(id);
+  }
+
+  // Inativar (Soft Delete)
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
   softDelete(@Param('id') id: string) {
     return this.organizationsService.softDelete(id);
   }
 
-  // 6. REATIVAR - Usado no botão "Reativar"
+  // Reativar
   @Patch(':id/reactivate')
+  @Roles(UserRole.ADMIN)
   reactivate(@Param('id') id: string) {
     return this.organizationsService.reactivate(id);
   }
 
-  // 7. EXCLUIR PERMANENTEMENTE - Usado no botão "Excluir Permanentemente"
-  @Delete(':id/permanent')
-  hardDelete(@Param('id') id: string) {
-    return this.organizationsService.hardDelete(id);
-  }
-
-  // === MEMBROS ===
-
+  // Adicionar membro manualmente (Ex: Gestor adicionando alguém por email)
   @Post(':id/members')
-  async addMember(@Param('id') id: string, @Body('email') email: string) {
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
+  addMember(@Param('id') id: string, @Body('email') email: string) {
     return this.organizationsService.addMember(id, email);
   }
 
-  @Patch(':id/manager')
-  async defineManager(@Param('id') id: string, @Body('userId') userId: string) {
-    return this.organizationsService.defineManager(id, userId);
-  }
-
+  // Remover membro
   @Delete('members/:userId')
-  async removeMember(@Param('userId') userId: string) {
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
+  removeMember(@Param('userId') userId: string) {
     return this.organizationsService.removeMember(userId);
-  }
-
-  @Patch(':id/token')
-  async generateToken(@Param('id') id: string) {
-    return this.organizationsService.generateToken(id);
   }
 }

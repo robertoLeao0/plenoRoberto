@@ -7,7 +7,8 @@ import {
   Param, 
   Delete, 
   Query, 
-  UseGuards 
+  UseGuards,
+  Request // Adicionado para pegar o usuário
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -28,13 +29,17 @@ export class ProjectsController {
     return this.projectsService.create(createProjectDto);
   }
 
+  // Rota inteligente: Serve tanto para Admin quanto para Gestor
   @Get()
   findAll(
+    @Request() req, // Pega o usuário logado (req.user)
     @Query('organizationId') organizationId?: string, 
     @Query('isActive') isActive?: string
   ) {
     const activeBoolean = isActive !== undefined ? isActive === 'true' : undefined;
-    return this.projectsService.findAll({ 
+    
+    // Passamos o usuário + os filtros para o service
+    return this.projectsService.findAll(req.user, { 
       organizationId, 
       isActive: activeBoolean 
     });
