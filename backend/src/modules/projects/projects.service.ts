@@ -200,14 +200,35 @@ export class ProjectsService {
     const log = await this.prisma.actionLog.findUnique({ where: { id: logId } });
     if (!log) throw new NotFoundException('Registro não encontrado.');
 
-    const template = await this.prisma.dayTemplate.findUnique({
-        where: { projectId_dayNumber: { projectId: log.projectId, dayNumber: log.dayNumber } }
-    });
-    const points = (status === 'APROVADO') ? (template?.points || 10) : 0;
+    let points = log.pointsAwarded;
+
+    // --- CORREÇÃO AUTOMÁTICA DE PONTOS ---
+    // Verifica se existe foto/vídeo no registro
+    const hasMedia = log.photoUrl && log.photoUrl !== '[]' && log.photoUrl.length > 5;
+
+    if (status === 'APROVADO') {
+        if (hasMedia) {
+            // Se tem foto, GARANTE que seja 25 pontos (corrige envios antigos de 10)
+            points = 25; 
+        } else {
+            // Se NÃO tem foto, busca o valor padrão do template (geralmente 10)
+            const template = await this.prisma.dayTemplate.findUnique({
+                where: { projectId_dayNumber: { projectId: log.projectId, dayNumber: log.dayNumber } }
+            });
+            points = template?.points || 10;
+        }
+    } else if (status === 'REJEITADO') {
+        points = 0;
+    }
 
     return this.prisma.actionLog.update({
       where: { id: logId },
-      data: { status, notes, pointsAwarded: points, completedAt: status === 'APROVADO' ? new Date() : null }
+      data: { 
+        status, 
+        notes, 
+        pointsAwarded: points, 
+        completedAt: status === 'APROVADO' ? new Date() : null 
+      }
     });
   }
 
