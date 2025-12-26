@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MailerModule } from '@nestjs-modules/mailer';
+import { ServeStaticModule } from '@nestjs/serve-static'; // <--- IMPORTANTE
+import { join } from 'path'; // <--- IMPORTANTE
 
 // Imports da Aplicação
 import { PrismaService } from './database/prisma.service';
@@ -19,8 +21,15 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ScheduledMessagesModule } from './integrations/scheduler/scheduled-messages.module';
 
+
 @Module({
   imports: [
+    // 1. LIBERA O ACESSO ÀS FOTOS NA URL /uploads
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'), 
+      serveRoot: '/uploads', 
+    }),
+
     // Configurações Globais
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
@@ -31,13 +40,12 @@ import { ScheduledMessagesModule } from './integrations/scheduler/scheduled-mess
       useFactory: async (config: ConfigService) => ({
         transport: {
           host: config.get<string>('MAIL_HOST'),
-          port: Number(config.get('MAIL_PORT')), // Garante que é número (465)
-          secure: true, // HostGator na porta 465 exige true
+          port: Number(config.get('MAIL_PORT')),
+          secure: true,
           auth: {
             user: config.get<string>('MAIL_USER'),
             pass: config.get<string>('MAIL_PASS'),
           },
-          // Importante para evitar erros de certificado SSL comuns em hospedagem compartilhada
           tls: {
             rejectUnauthorized: false,
           },
@@ -63,6 +71,7 @@ import { ScheduledMessagesModule } from './integrations/scheduler/scheduled-mess
     OrganizationsModule,
     DashboardModule,
     ScheduledMessagesModule,
+    RankingModule,
   ],
   providers: [PrismaService],
 })

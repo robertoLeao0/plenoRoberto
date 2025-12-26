@@ -15,6 +15,7 @@ import UserRanking from './pages/user/ranking';
 import UserSettings from './pages/user/settings';
 import Support from './pages/user/support';
 import ServerTasks from './pages/user/tasks';
+import TaskActionPage from './pages/user/tasks/TaskAction';
 
 // Páginas - Gestor
 import GestorDashboard from './pages/gestor/dashboard';
@@ -104,6 +105,7 @@ function DashboardWrapper() {
         {/* Admin - Usuários */}
         <Route path="admin/users" element={<AdminUsersList />} />
         <Route path="admin/users/create" element={<AdminCreateUser />} />
+        <Route path="user/projeto/:projectId/dia/:dayNumber" element={<TaskActionPage />} />
 
         {/* Admin - Projetos */}
         <Route path="admin/projects" element={<AdminProjectsList />} />
