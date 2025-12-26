@@ -307,5 +307,19 @@ export class ProjectsService {
     });
   }
 
+    // ==================================================================
+  // Busca um log específico pelo ID
+  // ==================================================================
+  async findLogById(logId: string) {
+    const log = await this.prisma.actionLog.findUnique({
+      where: { id: logId },
+      include: {
+        project: { select: { name: true } },
+        user: { select: { name: true, avatarUrl: true } }
+      }
+    });
+    if (!log) throw new NotFoundException('Tarefa não encontrada.');
+    return log;
+  }
 }
 

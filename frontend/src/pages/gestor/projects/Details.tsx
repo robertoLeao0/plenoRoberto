@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle, User as UserIcon, AlertCircle, Circle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, User as UserIcon, AlertCircle, Circle, ChevronRight } from 'lucide-react';
 import api from '../../../services/api';
 
 // Interfaces de Tipagem
@@ -45,12 +45,16 @@ export default function ProjectDetailsPage() {
       case 'PENDENTE_VALIDACAO':
         return (
           <button 
-            // Botão que leva para a validação
-            onClick={() => navigate(`/dashboard/gestor/validacao/${member.id}?projectId=${id}`)}
+            // Atalho: Se clicar no botão laranja, vai direto para o Histórico também
+            // (Você pode mudar para ir direto validar se preferir)
+            onClick={(e) => {
+              e.stopPropagation(); // Evita ativar o clique da linha 2 vezes
+              navigate(`/dashboard/gestor/historico/${member.id}?projectId=${id}`);
+            }}
             className="flex items-center gap-2 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors font-medium text-xs border border-orange-200"
           >
             <AlertCircle size={14} />
-            <span>{member.pendingCount} para validar</span>
+            <span>{member.pendingCount} pendente(s)</span>
           </button>
         );
       case 'COMPLETA':
@@ -77,7 +81,7 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Carregando detalhes...</div>;
+  if (isLoading) return <div className="p-8 text-center text-slate-500">Carregando equipe...</div>;
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -91,7 +95,7 @@ export default function ProjectDetailsPage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{data?.project.name}</h1>
-          <p className="text-sm text-slate-500">Acompanhamento e validação da equipe.</p>
+          <p className="text-sm text-slate-500">Selecione um membro para ver as tarefas.</p>
         </div>
       </header>
 
@@ -103,12 +107,18 @@ export default function ProjectDetailsPage() {
                     <tr>
                         <th className="px-6 py-4">Nome / Email</th>
                         <th className="px-6 py-4">CPF</th>
-                        <th className="px-6 py-4">Status de Realização</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4"></th> {/* Coluna da setinha */}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                     {data?.members.map((member) => (
-                        <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                        <tr 
+                            key={member.id} 
+                            // AQUI ESTÁ A MÁGICA: Clicar na linha leva para o Histórico do Usuário
+                            onClick={() => navigate(`/dashboard/gestor/historico/${member.id}?projectId=${data.project.id}`)}
+                            className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                        >
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200">
@@ -130,12 +140,15 @@ export default function ProjectDetailsPage() {
                             <td className="px-6 py-4">
                                 {renderStatusColumn(member)}
                             </td>
+                            <td className="px-6 py-4 text-right text-slate-300">
+                                <ChevronRight className="group-hover:text-slate-500 transition-colors" size={20} />
+                            </td>
                         </tr>
                     ))}
                     
                     {data?.members.length === 0 && (
                         <tr>
-                            <td colSpan={3} className="p-8 text-center text-slate-400">
+                            <td colSpan={4} className="p-8 text-center text-slate-400">
                                 Ninguém nesta equipe.
                             </td>
                         </tr>

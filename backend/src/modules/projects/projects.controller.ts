@@ -111,4 +111,9 @@ export class ProjectsController {
   getTasks(@Param('id') id: string) {
     return this.projectsService.findTasksByProject(id);
   }
+
+  @Get('logs/:logId')
+  getLogDetails(@Param('logId') logId: string) {
+    return this.projectsService.findLogById(logId);
+  }
 }

@@ -1,13 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useQuery } from '@tanstack/react-query'; 
+import { useQuery } from '@tanstack/react-query';
 
 // Auth
 import LoginPage from './pages/auth/Login';
 
 // Layouts
-import MainLayout from './components/layouts/MainLayout'; 
+import MainLayout from './components/layouts/MainLayout';
 
 // Páginas - Usuário Comum
 import UserDashboard from './pages/user/dashboard';
@@ -20,9 +20,11 @@ import ServerTasks from './pages/user/tasks';
 import GestorDashboard from './pages/gestor/dashboard';
 import GestorProjetosPage from './pages/gestor/projects';
 import GestorOrganizacaoPage from './pages/gestor/organizations';
-import GestorProjectDetailsPage from './pages/gestor/projects/Details'; 
-import GestorValidationPage from './pages/gestor/validation';        
-import GestorEquipePage from './pages/gestor/equipe';                 
+import GestorProjectDetailsPage from './pages/gestor/projects/Details';
+import GestorValidationPage from './pages/gestor/validation';
+import GestorEquipePage from './pages/gestor/equipe';
+import UserHistoryPage from './pages/gestor/projects/UserHistory';
+import TaskValidationPage from './pages/gestor/projects/TaskValidation';
 
 // Páginas - Admin
 import AdminDashboard from './pages/admin/dashboard';
@@ -33,7 +35,7 @@ import AdminProjectCreate from './pages/admin/projects/Create';
 import EditTask from './pages/admin/projects/Edit';
 import ProjectTasks from './pages/admin/projects/Tasks';
 import Integrations from './pages/admin/integrations';
-import UserProfile from './pages/common/UserProfile'; 
+import UserProfile from './pages/common/UserProfile';
 import ProjectDetails from './pages/admin/projects/Details';
 
 // Páginas - Organizações e Auditoria (Admin)
@@ -42,7 +44,7 @@ import OrganizationDetails from './pages/admin/organizations/Details';
 import UserProgress from './pages/admin/users/UserProgress';
 
 // Serviços
-import api from './services/api'; 
+import api from './services/api';
 
 // Tipagem do Usuário
 interface User {
@@ -60,23 +62,23 @@ function DashboardWrapper() {
       const { data } = await api.get('/auth/me');
       return data;
     },
-    retry: false, 
+    retry: false,
   });
 
   if (isLoading) {
     return <div className="p-6 text-center">Carregando sistema...</div>;
   }
-  
+
   if (!user || !user.role) {
     return <Navigate to="/login" replace />;
   }
-  
+
   // Lógica de Redirecionamento Baseado no Cargo
   const getDashboardPath = (role: string) => {
-    switch(role) {
+    switch (role) {
       case 'ADMIN': return '/dashboard/admin';
       case 'GESTOR_ORGANIZACAO': return '/dashboard/gestor';
-      case 'USUARIO': return '/dashboard/user'; 
+      case 'USUARIO': return '/dashboard/user';
       default: return '/dashboard/user';
     }
   };
@@ -98,18 +100,18 @@ function DashboardWrapper() {
 
         {/* --- ROTAS DE ADMIN --- */}
         <Route path="admin" element={<AdminDashboard />} />
-        
+
         {/* Admin - Usuários */}
         <Route path="admin/users" element={<AdminUsersList />} />
         <Route path="admin/users/create" element={<AdminCreateUser />} />
-        
+
         {/* Admin - Projetos */}
-        <Route path="admin/projects" element={<AdminProjectsList />} /> 
+        <Route path="admin/projects" element={<AdminProjectsList />} />
         <Route path="admin/projects/create" element={<AdminProjectCreate />} />
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
         <Route path="admin/projects/:id" element={<ProjectDetails />} />
-        
+
         {/* Admin - Integrações */}
         <Route path="admin/integrations" element={<Integrations />} />
 
@@ -118,22 +120,24 @@ function DashboardWrapper() {
         <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
         <Route path="admin/organizations/:orgId/users/:userId" element={<UserProgress />} />
 
-        {/* --- ROTAS DE GESTOR (ATUALIZADO) --- */}
+        {/* --- ROTAS DE GESTOR  --- */}
         <Route path="gestor" element={<GestorDashboard />} />
         <Route path="gestor/organizacao" element={<GestorOrganizacaoPage />} />
         <Route path="gestor/equipe" element={<GestorEquipePage />} />
-        
+
         {/* Gestão de Projetos e Validação */}
-        <Route path="gestor/projects" element={<GestorProjetosPage />} />  {/* Cuidado com a URL (projects vs projetos) */}
-        <Route path="gestor/projetos" element={<GestorProjetosPage />} /> {/* Alias para garantir */}
-        
+        <Route path="gestor/projects" element={<GestorProjetosPage />} /> 
+        <Route path="gestor/projetos" element={<GestorProjetosPage />} />
+        <Route path="gestor/historico/:userId" element={<UserHistoryPage />} />
+        <Route path="gestor/tarefa/:logId" element={<TaskValidationPage />} />
+
         {/* === AS ROTAS QUE FALTAVAM === */}
         <Route path="gestor/projetos/:id" element={<GestorProjectDetailsPage />} />
         <Route path="gestor/validacao/:userId" element={<GestorValidationPage />} />
 
         {/* Redirecionamento Automático na Raiz */}
         {isExactDashboard && <Route path="/" element={<Navigate to={userBaseRoute} replace />} />}
-        
+
       </Routes>
     </MainLayout>
   );
@@ -145,7 +149,7 @@ function App() {
       <ToastContainer autoClose={3000} position="top-right" />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard/*" element={<DashboardWrapper />} /> 
+        <Route path="/dashboard/*" element={<DashboardWrapper />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </>
