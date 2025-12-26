@@ -19,8 +19,10 @@ import ServerTasks from './pages/user/tasks';
 // Páginas - Gestor
 import GestorDashboard from './pages/gestor/dashboard';
 import GestorProjetosPage from './pages/gestor/projects';
-// IMPORTANTE: Certifique-se que o arquivo existe nesta pasta
-import GestorOrganizacaoPage from './pages/gestor/organizations'; 
+import GestorOrganizacaoPage from './pages/gestor/organizations';
+import GestorProjectDetailsPage from './pages/gestor/projects/Details'; 
+import GestorValidationPage from './pages/gestor/validation';        
+import GestorEquipePage from './pages/gestor/equipe';                 
 
 // Páginas - Admin
 import AdminDashboard from './pages/admin/dashboard';
@@ -116,10 +118,18 @@ function DashboardWrapper() {
         <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
         <Route path="admin/organizations/:orgId/users/:userId" element={<UserProgress />} />
 
-        {/* --- ROTAS DE GESTOR (AQUI ESTÁ A CORREÇÃO) --- */}
+        {/* --- ROTAS DE GESTOR (ATUALIZADO) --- */}
         <Route path="gestor" element={<GestorDashboard />} />
-        <Route path="gestor/projetos" element={<GestorProjetosPage />} />
         <Route path="gestor/organizacao" element={<GestorOrganizacaoPage />} />
+        <Route path="gestor/equipe" element={<GestorEquipePage />} />
+        
+        {/* Gestão de Projetos e Validação */}
+        <Route path="gestor/projects" element={<GestorProjetosPage />} />  {/* Cuidado com a URL (projects vs projetos) */}
+        <Route path="gestor/projetos" element={<GestorProjetosPage />} /> {/* Alias para garantir */}
+        
+        {/* === AS ROTAS QUE FALTAVAM === */}
+        <Route path="gestor/projetos/:id" element={<GestorProjectDetailsPage />} />
+        <Route path="gestor/validacao/:userId" element={<GestorValidationPage />} />
 
         {/* Redirecionamento Automático na Raiz */}
         {isExactDashboard && <Route path="/" element={<Navigate to={userBaseRoute} replace />} />}

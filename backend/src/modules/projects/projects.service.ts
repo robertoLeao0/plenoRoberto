@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, ActionStatus } from '@prisma/client'; // Adicionado ActionStatus
 import { UserRole } from '../../common/enums/role.enum'; 
 
 @Injectable()
@@ -32,7 +32,7 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // LISTAR TODOS (Limpo)
+  // LISTAR TODOS (Com filtros de segurança)
   // ==================================================================
   async findAll(user: any, filters: { organizationId?: string; isActive?: boolean } = {}) {
     const where: Prisma.ProjectWhereInput = {};
@@ -69,7 +69,7 @@ export class ProjectsService {
           select: { id: true, name: true },
         },
         _count: {
-          select: { tasks: true, subscribers: true }, // Subscribers são os membros
+          select: { tasks: true, subscribers: true }, // Subscribers são os membros inscritos via ManyChat/Integração
         },
       },
       orderBy: {
@@ -86,7 +86,6 @@ export class ProjectsService {
       where: { id },
       include: {
         organizations: true,
-        // Ajuste aqui conforme seus relacionamentos reais, se tiver dayTemplates
         tasks: {
           take: 5,
           orderBy: { createdAt: 'desc' },
@@ -102,23 +101,31 @@ export class ProjectsService {
   }
 
   // ==================================================================
-  // NOVO: BUSCAR DETALHES E PROGRESSO DA EQUIPE
+  // BUSCAR DETALHES E STATUS REAL DE VALIDAÇÃO (CORRIGIDO)
   // ==================================================================
   async findProjectTeamProgress(projectId: string) {
+    // 1. Busca o projeto, as organizações e os usuários com seus logs
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        // No seu schema novo, members são 'subscribers' ou via Organization?
-        // Vou assumir que você pega os usuários da Organização vinculada ao projeto
-        // OU se tiver um campo direto members no projeto.
-        // Dado o schema da Organização, os usuários estão na Org.
         organizations: {
-            include: {
-                users: true 
+          include: {
+            users: {
+              orderBy: { name: 'asc' },
+              include: {
+                // Trazemos os logs de ação (tarefas realizadas) filtradas por este projeto
+                actionLogs: {
+                  where: { projectId: projectId },
+                  select: { status: true } // Só precisamos do status para contar
+                }
+              }
             }
+          }
         },
+        // Usamos dayTemplates para contar o total de atividades esperadas na jornada
+        // Se preferir contar 'tasks', troque por select: { tasks: true }
         _count: {
-          select: { tasks: true }
+          select: { dayTemplates: true } 
         }
       }
     });
@@ -127,32 +134,62 @@ export class ProjectsService {
       throw new NotFoundException('Projeto não encontrado');
     }
 
-    // Lógica para extrair os membros (já que o projeto pode ter várias organizações)
-    // Aqui pegamos todos os usuários de todas as organizações vinculadas a esse projeto
-    const allMembers = project.organizations.flatMap(org => org.users);
+    // Define o total de tarefas/dias do projeto
+    const totalProjectTasks = project._count.dayTemplates || 0;
 
-    // Remove duplicatas (caso um user esteja em 2 orgs do mesmo projeto)
-    const uniqueMembers = [...new Map(allMembers.map(item => [item.id, item])).values()];
-  
-    const membersWithProgress = uniqueMembers.map(member => ({
-      id: member.id,
-      name: member.name,
-      email: member.email,
-      avatarUrl: member.avatarUrl,
-      phone: member.phone,
-      tasksCompleted: 0, // Implementar contagem real depois via TaskLog
-      totalTasks: project._count.tasks,
-      status: 'PENDENTE'
-    }));
+    // 2. Achata a lista de usuários das organizações
+    const allMembers = project.organizations.flatMap(org => org.users);
+    
+    // Remove duplicatas (caso usuário esteja em 2 orgs do mesmo projeto) usando Map
+    const uniqueMembersMap = new Map();
+    
+    allMembers.forEach(user => {
+      if (!uniqueMembersMap.has(user.id)) {
+        
+        // --- LÓGICA REAL DE CONTAGEM ---
+        const logs = user.actionLogs || [];
+        
+        // Quantas o gestor precisa aprovar?
+        const pendingValidation = logs.filter(log => log.status === 'EM_ANALISE').length;
+        
+        // Quantas já foram aprovadas?
+        const approved = logs.filter(log => log.status === 'APROVADO').length;
+
+        // Define o Status "Macro" para exibir na tabela do frontend
+        let statusRealizacao = 'NAO_REALIZADO';
+        
+        if (pendingValidation > 0) {
+            statusRealizacao = 'PENDENTE_VALIDACAO';
+        } else if (approved > 0 && approved < totalProjectTasks) {
+            statusRealizacao = 'EM_ANDAMENTO';
+        } else if (approved >= totalProjectTasks && totalProjectTasks > 0) {
+            statusRealizacao = 'COMPLETA';
+        }
+
+        uniqueMembersMap.set(user.id, {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          cpf: user.cpf || 'Não informado', // Retorna o CPF
+          avatarUrl: user.avatarUrl,
+          phone: user.phone,
+          
+          // Dados calculados
+          pendingCount: pendingValidation,
+          approvedCount: approved,
+          totalTasks: totalProjectTasks,
+          statusLabel: statusRealizacao
+        });
+      }
+    });
   
     return {
       project: {
         id: project.id,
         name: project.name,
-        // deadline: project.deadline, // Se tiver deadline no model
-        status: 'active', // Ou pegar do deletedAt
+        status: 'active',
       },
-      members: membersWithProgress
+      members: Array.from(uniqueMembersMap.values())
     };
   }
 
@@ -229,4 +266,46 @@ export class ProjectsService {
       ], 
     });
   }
+
+// ==================================================================
+  // VALIDAÇÃO: 1. BUSCAR LOGS DE UM USUÁRIO NO PROJETO
+  // ==================================================================
+  async findUserLogsInProject(projectId: string, userId: string) {
+    return this.prisma.actionLog.findMany({
+      where: {
+        projectId,
+        userId,
+        status: { in: ['EM_ANALISE', 'APROVADO', 'REJEITADO'] } // Traz tudo para histórico
+      },
+      include: {
+        // Traz o DayTemplate para sabermos o título da tarefa (ex: "Dia 1")
+        // Nota: Ajuste a relação se estiver usando Task em vez de DayTemplate
+        project: { select: { name: true } } 
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  // ==================================================================
+  // VALIDAÇÃO: 2. APROVAR OU REJEITAR (AVALIAR)
+  // ==================================================================
+  async evaluateLog(logId: string, status: 'APROVADO' | 'REJEITADO', notes?: string) {
+    const log = await this.prisma.actionLog.findUnique({ where: { id: logId } });
+    if (!log) throw new NotFoundException('Registro de atividade não encontrado.');
+
+    // Se aprovado, confirma os pontos (assumindo 1 ponto ou pegando do template)
+    const points = status === 'APROVADO' ? 10 : 0; // Exemplo: 10 pontos por aprovação
+
+    return this.prisma.actionLog.update({
+      where: { id: logId },
+      data: {
+        status,
+        notes, // Motivo da rejeição ou elogio
+        pointsAwarded: points,
+        completedAt: new Date() // Data da validação
+      }
+    });
+  }
+
 }
+

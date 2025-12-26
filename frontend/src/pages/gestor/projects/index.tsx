@@ -1,34 +1,39 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom'; // <--- 1. IMPORTANTE: Para navegar
 import api from '../../../services/api';
 
-// Interface do Projeto
+// Interface ajustada para o retorno real do Backend (Prisma)
 interface Project {
   id: string;
   name: string;
   status: 'active' | 'planning' | 'completed';
-  deadline: string;
-  teamSize: number;
-  progress: number;
   description?: string;
+  deadline?: string; // Pode vir null do banco
+  progress?: number; // Se não tiver, assumimos 0
+  
+  // O Prisma retorna contagens dentro de _count
+  _count?: {
+    tasks: number;
+    subscribers: number; // Isso é o tamanho da equipe
+  };
+  
+  // Mantive para compatibilidade caso você mande direto
+  teamSize?: number; 
 }
 
 export default function GestorProjetosPage() {
-  
+  const navigate = useNavigate(); // <--- 2. Inicializa o hook de navegação
+
   // Busca os projetos na API
   const { data: projects, isLoading, error } = useQuery({
     queryKey: ['gestor-projects-list'],
     queryFn: async () => {
-      console.log('🔍 [FRONTEND] Buscando projetos na rota /projects...');
-      
-      // CORREÇÃO PRINCIPAL: Chamando a rota padrão '/projects'
-      // O Backend vai decidir o que retornar baseado no token do usuário.
+      // O Backend decide o que retornar baseado no token (Gestor vê projetos da Org)
       const { data } = await api.get<Project[]>('/projects'); 
-      
-      console.log('✅ [FRONTEND] Projetos recebidos:', data);
       return data;
     },
-    retry: 1, // Tenta apenas 1 vez se der erro para não flodar o console
+    retry: 1,
   });
 
   // Função auxiliar para cor do status
@@ -46,7 +51,7 @@ export default function GestorProjetosPage() {
       case 'active': return 'Em Andamento';
       case 'planning': return 'Planejamento';
       case 'completed': return 'Concluído';
-      default: return status;
+      default: return status || 'Rascunho';
     }
   };
 
@@ -61,7 +66,7 @@ export default function GestorProjetosPage() {
       {error && (
         <div className="bg-red-50 p-4 rounded text-red-600 border border-red-200 flex flex-col gap-2">
           <strong>Erro ao carregar projetos.</strong>
-          <span className="text-sm">Verifique se você está logado corretamente e se o backend está rodando.</span>
+          <span className="text-sm">Verifique se você está vinculado a uma organização.</span>
         </div>
       )}
 
@@ -83,23 +88,33 @@ export default function GestorProjetosPage() {
                   <h3 className="text-lg font-bold text-slate-800 leading-tight">
                     {project.name}
                   </h3>
-                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getStatusColor(project.status)}`}>
-                    {getStatusLabel(project.status)}
+                  {/* Tratamento para status undefined */}
+                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getStatusColor(project.status || 'planning')}`}>
+                    {getStatusLabel(project.status || 'planning')}
                   </span>
                 </div>
                 
-                <p className="text-sm text-slate-500 mb-4 line-clamp-2">
+                <p className="text-sm text-slate-500 mb-4 line-clamp-2 h-10">
                   {project.description || 'Sem descrição definida.'}
                 </p>
 
                 <div className="space-y-2 text-sm text-slate-600">
                   <div className="flex items-center gap-2">
                     <span>📅</span>
-                    <span>Entrega: <span className="font-semibold text-slate-800">{new Date(project.deadline).toLocaleDateString()}</span></span>
+                    <span>
+                        Entrega: <span className="font-semibold text-slate-800">
+                            {project.deadline ? new Date(project.deadline).toLocaleDateString() : 'A definir'}
+                        </span>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span>👥</span>
-                    <span>Equipe: <span className="font-semibold text-slate-800">{project.teamSize || 0} membros</span></span>
+                    <span>
+                        Equipe: <span className="font-semibold text-slate-800">
+                            {/* Pega do _count (backend novo) ou teamSize (backend antigo) */}
+                            {project._count?.subscribers || project.teamSize || 0} membros
+                        </span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -116,7 +131,11 @@ export default function GestorProjetosPage() {
                   ></div>
                 </div>
                 
-                <button className="w-full mt-4 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-sm transition-colors border border-slate-200 cursor-pointer">
+                {/* 3. CORREÇÃO: ADICIONADO O ONCLICK */}
+                <button 
+                    onClick={() => navigate(`/dashboard/gestor/projetos/${project.id}`)}
+                    className="w-full mt-4 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-sm transition-colors border border-slate-200 cursor-pointer"
+                >
                   Ver Detalhes
                 </button>
               </div>
@@ -126,7 +145,7 @@ export default function GestorProjetosPage() {
           {(!projects || projects.length === 0) && !error && (
             <div className="col-span-full py-12 text-center bg-white rounded-lg border border-dashed border-slate-300">
               <p className="text-slate-500 text-lg">Você ainda não tem projetos ativos nesta organização.</p>
-              <p className="text-sm text-slate-400 mt-2">Se você acabou de ser adicionado, tente sair e logar novamente.</p>
+              <p className="text-sm text-slate-400 mt-2">Aguarde o Admin criar um projeto e vincular sua organização.</p>
             </div>
           )}
         </div>
