@@ -1,12 +1,11 @@
-import { Controller, Request, Post, UseGuards, Get, Body } from '@nestjs/common';
+import { Controller, Request, Post, UseGuards, Get, Body, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
-import { UsersService } from '../users/users.service'; // <--- IMPORTANTE: Importar o UsersService
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  // Injete o UsersService no construtor
   constructor(
     private authService: AuthService,
     private usersService: UsersService, 
@@ -20,11 +19,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getProfile(@Request() req) {
-    // CORREÇÃO: Em vez de retornar "req.user" (que só tem id e role),
-    // buscamos o usuário completo no banco usando o ID.
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('Sessão inválida ou expirada.');
+    }
     const user = await this.usersService.findOne(req.user.id);
     
-    // Removemos a senha antes de enviar para garantir segurança
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado no sistema.');
+    }
+    
     const { password, ...result } = user;
     
     return result;

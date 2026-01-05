@@ -1,38 +1,42 @@
-import { 
-  IsNotEmpty, 
-  IsString, 
-  IsDateString, 
-  IsOptional, 
-  IsArray, 
-  IsBoolean 
+import {
+  IsNotEmpty,
+  IsString,
+  IsDateString,
+  IsOptional,
+  IsArray,
+  IsBoolean
 } from 'class-validator';
 
 export class CreateTaskDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'O título é obrigatório' })
   @IsString()
   title: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  description: string;
+  description?: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'O ID do projeto é obrigatório' })
   @IsString()
   projectId: string;
 
-  // Valida um array de IDs para múltiplas organizações
-  @IsNotEmpty()
+  @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  organizationIds: string[];
+  @IsString({ each: true }) // Valida cada item do array como string
+  organizationIds?: string[];
 
-  @IsNotEmpty()
-  @IsDateString()
-  startAt: string; // Data de início (Liberação)
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true }) // Permite o campo 'checklist' enviado pelo front
+  checklist?: string[];
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'A data de início é obrigatória' })
   @IsDateString()
-  endAt: string;   // Data de fim (Bloqueio)
+  startAt: string;
+
+  @IsNotEmpty({ message: 'A data de fim é obrigatória' })
+  @IsDateString()
+  endAt: string;
 
   @IsOptional()
   @IsBoolean()

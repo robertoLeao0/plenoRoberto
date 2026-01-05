@@ -6,11 +6,22 @@ export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getAdminStats() {
-    // Executa as 3 contagens ao mesmo tempo para ser rápido
+    // Executa as contagens filtrando apenas os registros que NÃO foram excluídos (deletedAt: null)
     const [totalUsers, totalOrganizations, totalProjects] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.organization.count(),
-      this.prisma.project.count(), // Se ainda não tiver a tabela Project, remova essa linha
+      // Conta usuários ativos
+      this.prisma.user.count({
+        where: { deletedAt: null },
+      }),
+
+      // Conta organizações ativas
+      this.prisma.organization.count({
+        where: { deletedAt: null },
+      }),
+
+      // Conta projetos ativos
+      this.prisma.project.count({
+        where: { deletedAt: null },
+      }),
     ]);
 
     return {

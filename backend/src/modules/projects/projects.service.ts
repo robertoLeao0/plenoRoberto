@@ -7,7 +7,7 @@ import { UserRole } from '../../common/enums/role.enum';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ==================================================================
   // 1. CRUD PADRÃO
@@ -28,14 +28,14 @@ export class ProjectsService {
   }
 
   async findAll(user: any, filters: { organizationId?: string; isActive?: boolean } = {}) {
-    const where: Prisma.ProjectWhereInput = {};
+    const where: Prisma.ProjectWhereInput = {
+      deletedAt: filters.isActive !== false ? null : undefined,
+    };
 
-    if (filters.isActive === true) where.deletedAt = null;
-    else if (filters.isActive === false) where.deletedAt = { not: null };
-
-    if (user.role === UserRole.GESTOR_ORGANIZACAO) {
-      if (user.organizationId) {
-        where.organizations = { some: { id: user.organizationId } };
+    if (user.role === UserRole.USUARIO || user.role === UserRole.GESTOR_ORGANIZACAO) {
+      const orgId = user.organizationId || filters.organizationId;
+      if (orgId) {
+        where.organizations = { some: { id: orgId, deletedAt: null } };
       } else {
         return [];
       }
@@ -76,7 +76,7 @@ export class ProjectsService {
   async update(id: string, updateProjectDto: UpdateProjectDto) {
     await this.findOne(id);
     const { isActive, organizationIds, ...rest } = updateProjectDto as any;
-    
+
     const dataToUpdate: any = { ...rest };
     if (isActive !== undefined) dataToUpdate.deletedAt = isActive ? null : new Date();
 
@@ -104,13 +104,57 @@ export class ProjectsService {
   async deletePermanent(id: string) {
     return this.prisma.project.delete({ where: { id } });
   }
-
-  async findTasksByProject(projectId: string) {
-    return this.prisma.task.findMany({
-      where: { projectId },
-      orderBy: [{ startAt: 'asc' }],
+  // 1. Método que busca UMA tarefa específica com checklist (para o lápis de editar)
+  async findTaskById(taskId: string) {
+    return await this.prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        checklist: true,      // 🚀 OBRIGATÓRIO: Sem isso a modal abre vazia
+        organizations: true
+      }
     });
   }
+
+  // 2. Garanta que a listagem geral também traga o checklist
+  async findTasksByProject(projectId: string) {
+    return await this.prisma.task.findMany({
+      where: { projectId },
+      orderBy: { startAt: 'asc' },
+      include: {
+        checklist: true,      // 🚀 OBRIGATÓRIO para a listagem do admin
+        organizations: true
+      }
+    });
+  }
+
+  async updateTask(taskId: string, data: any) {
+  const { checklist, organizationIds, ...rest } = data;
+
+  return await this.prisma.task.update({
+    where: { id: taskId },
+    data: {
+      ...rest,
+      // Garante a conversão correta de datas para o Prisma
+      startAt: data.startAt ? new Date(data.startAt) : undefined,
+      endAt: data.endAt ? new Date(data.endAt) : undefined,
+
+      // Atualiza o vínculo com as organizações
+      organizations: organizationIds ? {
+        set: organizationIds.map((orgId: string) => ({ id: orgId }))
+      } : undefined,
+
+      // 🚀 SOLUÇÃO DO CHECKLIST: Deleta os antigos e cria os novos enviados
+      checklist: checklist ? {
+        deleteMany: {}, // Limpa o que existia antes para essa tarefa
+        create: checklist.map((text: string) => ({ text })) // Cria os novos textos
+      } : undefined
+    },
+    include: {
+      checklist: true,
+      organizations: true
+    }
+  });
+}
 
   // ==================================================================
   // 2. GESTÃO E PROGRESSO DA EQUIPE
@@ -136,13 +180,13 @@ export class ProjectsService {
         _count: { select: { tasks: true } }
       }
     });
-  
+
     if (!project) throw new NotFoundException('Projeto não encontrado');
 
     const totalProjectTasks = project._count.tasks || 0;
     const allMembers = project.organizations.flatMap(org => org.users);
     const uniqueMembersMap = new Map();
-    
+
     allMembers.forEach(user => {
       if (!uniqueMembersMap.has(user.id)) {
         const logs = user.actionLogs || [];
@@ -168,7 +212,7 @@ export class ProjectsService {
         });
       }
     });
-  
+
     return {
       project: { id: project.id, name: project.name, status: 'active' },
       members: Array.from(uniqueMembersMap.values())
@@ -207,27 +251,27 @@ export class ProjectsService {
     const hasMedia = log.photoUrl && log.photoUrl !== '[]' && log.photoUrl.length > 5;
 
     if (status === 'APROVADO') {
-        if (hasMedia) {
-            // Se tem foto, GARANTE que seja 25 pontos (corrige envios antigos de 10)
-            points = 25; 
-        } else {
-            // Se NÃO tem foto, busca o valor padrão do template (geralmente 10)
-            const template = await this.prisma.dayTemplate.findUnique({
-                where: { projectId_dayNumber: { projectId: log.projectId, dayNumber: log.dayNumber } }
-            });
-            points = template?.points || 10;
-        }
+      if (hasMedia) {
+        // Se tem foto, GARANTE que seja 25 pontos (corrige envios antigos de 10)
+        points = 25;
+      } else {
+        // Se NÃO tem foto, busca o valor padrão do template (geralmente 10)
+        const template = await this.prisma.dayTemplate.findUnique({
+          where: { projectId_dayNumber: { projectId: log.projectId, dayNumber: log.dayNumber } }
+        });
+        points = template?.points || 10;
+      }
     } else if (status === 'REJEITADO') {
-        points = 0;
+      points = 0;
     }
 
     return this.prisma.actionLog.update({
       where: { id: logId },
-      data: { 
-        status, 
-        notes, 
-        pointsAwarded: points, 
-        completedAt: status === 'APROVADO' ? new Date() : null 
+      data: {
+        status,
+        notes,
+        pointsAwarded: points,
+        completedAt: status === 'APROVADO' ? new Date() : null
       }
     });
   }
@@ -235,46 +279,45 @@ export class ProjectsService {
   // ==================================================================
   // 4. JORNADA DO USUÁRIO (SYNC EM TEMPO REAL)
   // ==================================================================
-  
+
   async getUserJourney(projectId: string, userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true, avatarUrl: true }
     });
 
-    console.log(`[SYNC] Iniciando sincronização para projeto ${projectId}`);
 
     // 1. SINCRONIZAÇÃO EM TEMPO REAL
     let realTasks = [];
     try {
-        realTasks = await this.prisma.task.findMany({
-            where: { projectId },
-            orderBy: { startAt: 'asc' } 
+      realTasks = await this.prisma.task.findMany({
+        where: { projectId },
+        orderBy: { startAt: 'asc' }
+      });
+
+      await this.prisma.dayTemplate.deleteMany({ where: { projectId } });
+
+      if (realTasks.length > 0) {
+        const mirrorData = realTasks.map((task, index) => {
+          // CORREÇÃO: Corta texto para o espelho, mas no detalhe pegamos o completo
+          const rawDesc = task.description || `Atividade: ${task.title}`;
+          const safeDesc = rawDesc.length > 190 ? rawDesc.substring(0, 187) + '...' : rawDesc;
+
+          return {
+            projectId,
+            dayNumber: index + 1,
+            title: task.title || 'Sem título',
+            description: safeDesc,
+            category: 'MENTE' as any,
+            points: 10,
+            requiresPhoto: true
+          };
         });
-        
-        await this.prisma.dayTemplate.deleteMany({ where: { projectId } });
 
-        if (realTasks.length > 0) {
-            const mirrorData = realTasks.map((task, index) => {
-                // CORREÇÃO: Corta texto para o espelho, mas no detalhe pegamos o completo
-                const rawDesc = task.description || `Atividade: ${task.title}`;
-                const safeDesc = rawDesc.length > 190 ? rawDesc.substring(0, 187) + '...' : rawDesc;
-
-                return {
-                    projectId,
-                    dayNumber: index + 1,
-                    title: task.title || 'Sem título',
-                    description: safeDesc,
-                    category: 'MENTE' as any,
-                    points: 10,
-                    requiresPhoto: true
-                };
-            });
-
-            await this.prisma.dayTemplate.createMany({ data: mirrorData });
-        }
+        await this.prisma.dayTemplate.createMany({ data: mirrorData });
+      }
     } catch (error) {
-        console.error('[SYNC ERROR] Falha ao sincronizar tarefas:', error);
+      console.error('[SYNC ERROR] Falha ao sincronizar tarefas:', error);
     }
 
     // 2. Busca os templates
@@ -303,7 +346,7 @@ export class ProjectsService {
         logId: log ? log.id : null,
         completedAt: log ? log.completedAt : null,
         notes: log ? log.notes : null,
-        date: taskDate.toISOString() 
+        date: taskDate.toISOString()
       };
     });
 
@@ -312,37 +355,46 @@ export class ProjectsService {
 
   // 5. Status Individual (Envio) - AGORA COM TEXTO COMPLETO
   async getTaskStatusForUser(userId: string, projectId: string, dayNumber: number) {
-    // A. Buscamos a TAREFA ORIGINAL para garantir que temos o texto completo
-    const tasks = await this.prisma.task.findMany({ 
-        where: { projectId }, 
-        orderBy: { startAt: 'asc' } 
+    // A. Buscamos a TAREFA ORIGINAL incluindo a Checklist
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId },
+      orderBy: { startAt: 'asc' },
+      include: {
+        checklist: {
+          select: {
+            id: true,
+            text: true
+          }
+        }
+      }
     });
-    const originalTask = tasks[dayNumber - 1]; // Pega a tarefa correspondente ao dia
-    
-    // B. Tenta achar o template
+
+    const originalTask = tasks[dayNumber - 1];
+
+
     let template = await this.prisma.dayTemplate.findUnique({
       where: { projectId_dayNumber: { projectId, dayNumber } }
     });
-    
-    // C. Fallback se não achar o template
-    if (!template) {
-         if (!originalTask) throw new NotFoundException('Dia não encontrado neste projeto.');
-         
-         const rawDesc = originalTask.description || '';
-         const safeDesc = rawDesc.length > 190 ? rawDesc.substring(0, 187) + '...' : rawDesc;
 
-         // CORREÇÃO: Removido createdAt/updatedAt que causavam erro
-         template = {
-             projectId,
-             dayNumber,
-             title: originalTask.title,
-             description: safeDesc,
-             points: 10,
-             requiresPhoto: true,
-             category: 'MENTE' as any,
-             id: 'temp-fallback'
-         } as any;
+
+    if (!template) {
+      if (!originalTask) throw new NotFoundException('Dia não encontrado neste projeto.');
+
+      const rawDesc = originalTask.description || '';
+      const safeDesc = rawDesc.length > 190 ? rawDesc.substring(0, 187) + '...' : rawDesc;
+
+      template = {
+        projectId,
+        dayNumber,
+        title: originalTask.title,
+        description: safeDesc,
+        points: 10,
+        requiresPhoto: true,
+        category: 'MENTE' as any,
+        id: 'temp-fallback'
+      } as any;
     }
+
 
     const log = await this.prisma.actionLog.findUnique({
       where: { userId_projectId_dayNumber: { userId, projectId, dayNumber } }
@@ -351,14 +403,29 @@ export class ProjectsService {
     return {
       dayNumber: template.dayNumber,
       title: template.title,
-      // AQUI: Usamos a descrição da originalTask se existir (completa), senão do template
       description: originalTask?.description || template.description,
       requiresPhoto: template.requiresPhoto,
       points: template.points,
       status: log ? log.status : 'NAO_INICIADO',
       logId: log ? log.id : undefined,
       photoUrl: log ? log.photoUrl : undefined,
-      notes: log ? log.notes : undefined
+      notes: log ? log.notes : undefined,
+
+      checklist: originalTask?.checklist || []
+    };
+  }
+
+  async getUserProjectStats(projectId: string, userId: string) {
+    const stats = await this.prisma.rankingSummary.findUnique({
+      where: {
+        userId_projectId: { userId, projectId }
+      }
+    });
+
+    return {
+      totalPoints: stats?.totalPoints || 0,
+      completedDays: stats?.completedDays || 0,
+      completionRate: stats?.completionRate || 0
     };
   }
 
@@ -366,63 +433,68 @@ export class ProjectsService {
   // 6. Envio de Tarefa (LÓGICA MULTIMÍDIA)
   // ==================================================================
   async submitActionLog(userId: string, projectId: string, dayNumber: number, mediaData: string | null, notes?: string) {
-    let dayTemplate = await this.prisma.dayTemplate.findUnique({
-      where: { projectId_dayNumber: { projectId, dayNumber } }
+    // 1. Busca a tarefa ATUAL para sincronizar Título e Descrição
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId },
+      orderBy: { startAt: 'asc' }
     });
+    const currentTask = tasks[dayNumber - 1];
+    if (!currentTask) throw new NotFoundException('Tarefa não encontrada.');
 
-    if (!dayTemplate) {
-        // Fallback de criação automática do template (igual ao anterior)
-        const tasks = await this.prisma.task.findMany({ where: { projectId }, orderBy: { startAt: 'asc' } });
-        const targetTask = tasks[dayNumber - 1];
-        if (!targetTask) throw new NotFoundException('Tarefa não encontrada.');
-        
-        const rawDesc = targetTask.description || '';
-        const safeDesc = rawDesc.length > 190 ? rawDesc.substring(0, 187) + '...' : rawDesc;
-
-        dayTemplate = await this.prisma.dayTemplate.create({
-            data: {
-                projectId,
-                dayNumber,
-                title: targetTask.title,
-                description: safeDesc,
-                category: 'MENTE' as any,
-                points: 10,
-                requiresPhoto: true
-            }
-        });
-    }
-
-    // Validação: Se requer foto, mediaData não pode ser nulo nem array vazio
-    const hasMedia = mediaData && mediaData !== '[]';
-    
-    if (dayTemplate.requiresPhoto && !hasMedia) {
-        throw new BadRequestException('É obrigatório anexar ao menos uma foto ou vídeo.');
-    }
-
-    // Pontos: 25 com mídia, 10 sem
-    const pointsToAward = hasMedia ? 25 : 10;
-    const status = 'EM_ANALISE'; 
-
-    // Usamos o campo photoUrl para guardar o JSON das mídias
-    return this.prisma.actionLog.upsert({
-      where: { userId_projectId_dayNumber: { userId, projectId, dayNumber } },
-      update: { 
-          photoUrl: mediaData, 
-          status, 
-          notes, 
-          pointsAwarded: pointsToAward, 
-          completedAt: null 
+    // 2. Atualiza ou Cria o Template (Resolve o problema do nome antigo voltando)
+    await this.prisma.dayTemplate.upsert({
+      where: { projectId_dayNumber: { projectId, dayNumber } },
+      update: {
+        title: currentTask.title,
+        description: currentTask.description || '',
       },
-      create: { 
-          userId, 
-          projectId, 
-          dayNumber, 
-          photoUrl: mediaData, 
-          status, 
-          notes, 
-          pointsAwarded: pointsToAward, 
-          completedAt: null 
+      create: {
+        projectId,
+        dayNumber,
+        title: currentTask.title,
+        description: currentTask.description || '',
+        category: 'MENTE',
+        points: 10,
+        requiresPhoto: false
       }
     });
+
+    // 3. Lógica de Status e Pontuação
+    const hasMedia = mediaData && mediaData !== 'null' && mediaData !== '[]';
+    const finalStatus = hasMedia ? 'EM_ANALISE' : 'APROVADO'; // Checklist = Aprovado na hora
+    const pointsToAward = hasMedia ? 25 : 10;
+
+    // 4. Salva o Log de Ação
+    const log = await this.prisma.actionLog.upsert({
+      where: { userId_projectId_dayNumber: { userId, projectId, dayNumber } },
+      update: {
+        status: finalStatus as any,
+        photoUrl: mediaData,
+        notes,
+        pointsAwarded: pointsToAward,
+        completedAt: new Date()
+      },
+      create: {
+        userId,
+        projectId,
+        dayNumber,
+        status: finalStatus as any,
+        photoUrl: mediaData,
+        notes,
+        pointsAwarded: pointsToAward,
+        completedAt: new Date()
+      }
+    });
+
+    // 5. Soma pontos no Ranking apenas se for APROVADO (checklist)
+    if (finalStatus === 'APROVADO') {
+      await this.prisma.rankingSummary.upsert({
+        where: { userId_projectId: { userId, projectId } },
+        update: { totalPoints: { increment: pointsToAward }, completedDays: { increment: 1 } },
+        create: { userId, projectId, totalPoints: pointsToAward, completedDays: 1, completionRate: 0 }
+      });
+    }
+
+    return log;
   }
 }

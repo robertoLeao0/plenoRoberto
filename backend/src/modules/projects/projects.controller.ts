@@ -1,13 +1,13 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
-  UseGuards, 
-  Request, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
   Query,
   UseInterceptors,
   UploadedFiles, // Mudou de UploadedFile para UploadedFiles
@@ -29,7 +29,7 @@ import { UserRole } from '../../common/enums/role.enum';
 @Controller('projects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(private readonly projectsService: ProjectsService) { }
 
   // ... (MANTENHA OS MÉTODOS CRUD, findAll, create, update, delete IGUAIS) ...
   // ... (Vou focar apenas na rota de UPLOAD que mudou) ...
@@ -94,7 +94,7 @@ export class ProjectsController {
     fileFilter: (req, file, cb) => {
       // Aceita Imagens E Vídeos
       if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|mp4|webm|quicktime)$/)) {
-         return cb(new BadRequestException('Apenas imagens (jpg, png) e vídeos (mp4, mov) são permitidos!'), false);
+        return cb(new BadRequestException('Apenas imagens (jpg, png) e vídeos (mp4, mov) são permitidos!'), false);
       }
       cb(null, true);
     }
@@ -106,14 +106,14 @@ export class ProjectsController {
     @UploadedFiles() files: Array<Express.Multer.File> // Agora recebe um Array
   ) {
     const dayNum = parseInt(body.dayNumber, 10);
-    
+
     // Gera lista de URLs
     let mediaUrlsString = null;
-    
+
     if (files && files.length > 0) {
-        const urls = files.map(f => `/uploads/${req.user.id}/evidence/${f.filename}`);
-        // Salva como JSON String para caber no campo photoUrl do banco
-        mediaUrlsString = JSON.stringify(urls);
+      const urls = files.map(f => `/uploads/${req.user.id}/evidence/${f.filename}`);
+      // Salva como JSON String para caber no campo photoUrl do banco
+      mediaUrlsString = JSON.stringify(urls);
     }
 
     return this.projectsService.submitActionLog(
@@ -140,6 +140,8 @@ export class ProjectsController {
   @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
   evaluateLog(@Param('logId') logId: string, @Body() body: any) { return this.projectsService.evaluateLog(logId, body.status, body.notes); }
 
+
+
   @Get('logs/:logId')
   @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
   getLogDetails(@Param('logId') logId: string) { return this.projectsService.findLogById(logId); }
@@ -155,4 +157,23 @@ export class ProjectsController {
 
   @Get(':id/tasks')
   getTasks(@Param('id') id: string) { return this.projectsService.findTasksByProject(id); }
+
+
+  // Adicione ou verifique esta rota no seu ProjectsController
+  @Get('tasks/:taskId')
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
+  async getTaskById(@Param('taskId') taskId: string) {
+    // Certifique-se de que o service retorne: 
+    // this.prisma.task.findUnique({ where: { id: taskId }, include: { checklist: true } })
+    return this.projectsService.findTaskById(taskId);
+  }
+
+  @Patch('tasks/:taskId')
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO)
+  async updateTask(
+    @Param('taskId') taskId: string,
+    @Body() data: any
+  ) {
+    return this.projectsService.updateTask(taskId, data);
+  }
 }
