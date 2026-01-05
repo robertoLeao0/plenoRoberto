@@ -76,18 +76,24 @@ export class ProjectsService {
   async update(id: string, updateProjectDto: UpdateProjectDto) {
     await this.findOne(id);
     const { isActive, organizationIds, ...rest } = updateProjectDto as any;
-
     const dataToUpdate: any = { ...rest };
-    if (isActive !== undefined) dataToUpdate.deletedAt = isActive ? null : new Date();
-
+    if (isActive !== undefined) {
+      dataToUpdate.deletedAt = isActive ? null : new Date();
+    }
     const organizationsUpdate = organizationIds
       ? { set: organizationIds.map((orgId: string) => ({ id: orgId })) }
       : undefined;
-
     return this.prisma.project.update({
       where: { id },
-      data: { ...dataToUpdate, organizations: organizationsUpdate },
-      include: { organizations: true },
+      data: {
+        ...dataToUpdate,
+        organizations: organizationsUpdate
+      },
+      include: {
+        organizations: {
+          select: { id: true, name: true }
+        }
+      },
     });
   }
 
@@ -128,33 +134,33 @@ export class ProjectsService {
   }
 
   async updateTask(taskId: string, data: any) {
-  const { checklist, organizationIds, ...rest } = data;
+    const { checklist, organizationIds, ...rest } = data;
 
-  return await this.prisma.task.update({
-    where: { id: taskId },
-    data: {
-      ...rest,
-      // Garante a conversão correta de datas para o Prisma
-      startAt: data.startAt ? new Date(data.startAt) : undefined,
-      endAt: data.endAt ? new Date(data.endAt) : undefined,
+    return await this.prisma.task.update({
+      where: { id: taskId },
+      data: {
+        ...rest,
+        // Garante a conversão correta de datas para o Prisma
+        startAt: data.startAt ? new Date(data.startAt) : undefined,
+        endAt: data.endAt ? new Date(data.endAt) : undefined,
 
-      // Atualiza o vínculo com as organizações
-      organizations: organizationIds ? {
-        set: organizationIds.map((orgId: string) => ({ id: orgId }))
-      } : undefined,
+        // Atualiza o vínculo com as organizações
+        organizations: organizationIds ? {
+          set: organizationIds.map((orgId: string) => ({ id: orgId }))
+        } : undefined,
 
-      // 🚀 SOLUÇÃO DO CHECKLIST: Deleta os antigos e cria os novos enviados
-      checklist: checklist ? {
-        deleteMany: {}, // Limpa o que existia antes para essa tarefa
-        create: checklist.map((text: string) => ({ text })) // Cria os novos textos
-      } : undefined
-    },
-    include: {
-      checklist: true,
-      organizations: true
-    }
-  });
-}
+        // 🚀 SOLUÇÃO DO CHECKLIST: Deleta os antigos e cria os novos enviados
+        checklist: checklist ? {
+          deleteMany: {}, // Limpa o que existia antes para essa tarefa
+          create: checklist.map((text: string) => ({ text })) // Cria os novos textos
+        } : undefined
+      },
+      include: {
+        checklist: true,
+        organizations: true
+      }
+    });
+  }
 
   // ==================================================================
   // 2. GESTÃO E PROGRESSO DA EQUIPE

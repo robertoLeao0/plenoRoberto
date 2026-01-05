@@ -136,13 +136,14 @@ export default function AdminProjectDetails() {
   const updateProjectOrgsMutation = useMutation({
     mutationFn: async () => {
       return api.patch(`/projects/${id}`, {
-        organizationIds: project?.organizations.map(org => org.id) || [],
+        organizationIds: selectedOrgIds,
       });
     },
     onSuccess: () => {
       toast.success('Organizações atualizadas com sucesso!');
       setIsManageOrgsModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-list'] });
       queryClient.invalidateQueries({ queryKey: ['my-projects-list'] });
     },
@@ -153,18 +154,16 @@ export default function AdminProjectDetails() {
   // === 4. CRIAR TAREFA ===
   const createTaskMutation = useMutation({
     mutationFn: async () => {
-      // 1. Filtramos a checklist aqui dentro para garantir que pegamos o que foi digitado
       const validChecklist = checklistItems.filter(item => item.trim() !== "");
 
       const payload = {
-        projectId: id, // ID do projeto da URL
+        projectId: id,
         title: newTaskTitle,
         description: newTaskDescription,
-        startAt: newTaskStart, // Já corrigimos o formato antes
+        startAt: newTaskStart,
         endAt: newTaskEnd,
         requireMedia: newTaskRequireMedia,
-        checklist: validChecklist, // Envia o array de strings
-        // Garante que as organizações selecionadas sejam enviadas
+        checklist: validChecklist,
         organizationIds: selectedOrgIds
       };
       return api.post('/tasks', payload);
@@ -172,7 +171,6 @@ export default function AdminProjectDetails() {
     onSuccess: () => {
       toast.success('Tarefa criada com sucesso!');
       setIsTaskModalOpen(false);
-      // Limpa tudo para a próxima
       setNewTaskTitle('');
       setNewTaskDescription('');
       setNewTaskStart('');
@@ -532,16 +530,19 @@ export default function AdminProjectDetails() {
             </div>
 
             <div className="pt-4 flex gap-3 mt-auto">
-              <button onClick={() => {
-                setIsTaskModalOpen(false);
-                setTaskToEdit(null);
-                resetTaskForm();
-              }} className="flex-1 py-3 border rounded-lg hover:bg-gray-50 font-medium">Cancelar</button>
+              <button
+                onClick={() => {
+                  setIsManageOrgsModalOpen(false);
+                  setSelectedOrgIds(project?.organizations?.map(o => o.id) || []);
+                }}
+                className="flex-1 py-3 border rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancelar
+              </button>
               <button
                 onClick={() => updateProjectOrgsMutation.mutate()}
                 disabled={updateProjectOrgsMutation.isPending}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center justify-center gap-2"
-              >
+                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center justify-center gap-2">
                 {updateProjectOrgsMutation.isPending ? 'Salvando...' : 'Salvar Alterações'}
               </button>
             </div>
