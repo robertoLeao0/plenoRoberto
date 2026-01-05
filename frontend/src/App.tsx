@@ -94,6 +94,7 @@ function DashboardWrapper() {
 
         {/* --- ROTAS DE USUÁRIO --- */}
         <Route path="user" element={<UserDashboard />} />
+        <Route path="user/ranking/:projectId" element={<UserRanking />} />
         <Route path="user/ranking" element={<UserRanking />} />
         <Route path="user/settings" element={<UserSettings />} />
         <Route path="user/support" element={<Support />} />
@@ -128,7 +129,7 @@ function DashboardWrapper() {
         <Route path="gestor/equipe" element={<GestorEquipePage />} />
 
         {/* Gestão de Projetos e Validação */}
-        <Route path="gestor/projects" element={<GestorProjetosPage />} /> 
+        <Route path="gestor/projects" element={<GestorProjetosPage />} />
         <Route path="gestor/projetos" element={<GestorProjetosPage />} />
         <Route path="gestor/historico/:userId" element={<UserHistoryPage />} />
         <Route path="gestor/tarefa/:logId" element={<TaskValidationPage />} />

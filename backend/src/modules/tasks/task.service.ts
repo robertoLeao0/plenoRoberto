@@ -89,7 +89,10 @@ export class TaskService {
   async findAllByProject(projectId: string) {
     return this.prisma.task.findMany({
       where: { projectId },
-      include: { organizations: true, checklist: true },
+      include: {
+        organizations: true,
+        checklist: true
+      },
       orderBy: { createdAt: 'asc' }
     });
   }
@@ -97,13 +100,11 @@ export class TaskService {
 
 
   async findOne(id: string) {
-    return await this.prisma.task.findUnique({
+    return this.prisma.task.findUnique({
       where: { id },
       include: {
-        organizations: true,
-        project: true,
         checklist: true
-      },
+      }
     });
   }
 
@@ -174,42 +175,50 @@ export class TaskService {
         title: task.title,
         description: task.description,
         status: log ? log.status : 'PENDENTE',
-        points: 10, // Pontuação base visual
+        points: 10,
         checklist: task.checklist
       };
     });
   }
 
 
-
-
-  // No seu TaskService
   async update(id: string, data: any) {
     const { checklist, organizationIds, ...rest } = data;
-
-    return await this.prisma.task.update({
+    const updatedTask = await this.prisma.task.update({
       where: { id },
       data: {
         ...rest,
         startAt: data.startAt ? new Date(data.startAt) : undefined,
         endAt: data.endAt ? new Date(data.endAt) : undefined,
-
         organizations: organizationIds ? {
           set: organizationIds.map((orgId: string) => ({ id: orgId }))
         } : undefined,
-
         checklist: checklist ? {
           deleteMany: {},
-          create: checklist.map((item: any) => ({
-            text: typeof item === 'object' ? item.text : item
-          }))
+          create: checklist.map((text: string) => ({ text }))
         } : undefined
       },
-      include: {
-        checklist: true,
-        organizations: true
-      }
+      include: { checklist: true, organizations: true }
     });
+
+    const allTasks = await this.prisma.task.findMany({
+      where: { projectId: updatedTask.projectId },
+      orderBy: { startAt: 'asc' }
+    });
+
+    const dayNumber = allTasks.findIndex(t => t.id === id) + 1;
+
+    if (dayNumber > 0) {
+      await this.prisma.dayTemplate.updateMany({
+        where: { projectId: updatedTask.projectId, dayNumber },
+        data: {
+          title: updatedTask.title,
+          description: updatedTask.description || '',
+        }
+      });
+    }
+
+    return updatedTask;
   }
 
   async remove(id: string) {

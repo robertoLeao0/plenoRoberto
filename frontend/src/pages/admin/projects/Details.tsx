@@ -48,15 +48,18 @@ interface ProjectDetails {
 export default function AdminProjectDetails() {
   const handleCreateTask = () => {
     if (!newTaskTitle.trim()) return toast.warning("O título é obrigatório!");
-
     if (!newTaskStart || !newTaskEnd) return toast.warning("Defina as datas.");
 
+    // Padronize a limpeza do checklist igual à função de edição
+    const cleanChecklist = checklistItems
+      .filter(item => typeof item === 'string' && item.trim() !== "")
+      .map(item => item.trim());
 
-    const validChecklist = checklistItems.filter(item => item.trim() !== "");
-    if (validChecklist.length === 0) {
+    if (cleanChecklist.length === 0) {
       return toast.info("Adicione pelo menos um item na checklist.");
     }
 
+    // Chame a mutação garantindo que o payload reflita o que o backend espera
     createTaskMutation.mutate();
   };
 
@@ -154,40 +157,44 @@ export default function AdminProjectDetails() {
   // === 4. CRIAR TAREFA ===
   const createTaskMutation = useMutation({
     mutationFn: async () => {
-      const validChecklist = checklistItems.filter(item => item.trim() !== "");
+      // 1. Padronização da limpeza do checklist (igual à edição)
+      const cleanChecklist = checklistItems
+        .filter(item => typeof item === 'string' && item.trim() !== "")
+        .map(item => item.trim());
 
       const payload = {
         projectId: id,
         title: newTaskTitle,
         description: newTaskDescription,
-        startAt: newTaskStart,
-        endAt: newTaskEnd,
+        // 2. Garantia de formato ISO para o Backend
+        startAt: newTaskStart ? new Date(newTaskStart).toISOString() : null,
+        endAt: newTaskEnd ? new Date(newTaskEnd).toISOString() : null,
         requireMedia: newTaskRequireMedia,
-        checklist: validChecklist,
+        checklist: cleanChecklist,
         organizationIds: selectedOrgIds
       };
+
       return api.post('/tasks', payload);
     },
     onSuccess: () => {
       toast.success('Tarefa criada com sucesso!');
       setIsTaskModalOpen(false);
-      setNewTaskTitle('');
-      setNewTaskDescription('');
-      setNewTaskStart('');
-      setNewTaskEnd('');
-      setChecklistItems(['']);
+
+      // 3. Centralização da limpeza usando a função que já criamos
+      resetTaskForm();
+
       queryClient.invalidateQueries({ queryKey: ['project', id] });
     },
     onError: (err: any) => {
       console.error("Erro detalhado:", err.response?.data);
-      toast.error(err.response?.data?.message || 'Erro ao criar tarefa.');
+      const errorMessage = err.response?.data?.message || 'Erro ao criar tarefa.';
+      toast.error(Array.isArray(errorMessage) ? errorMessage[0] : errorMessage);
     }
   });
 
   // === 5. EDITAR/EXCLUIR TAREFA ===
   const handleOpenCreateTask = () => {
-    setTaskToEdit(null); // Garante que o estado de edição está vazio
-    resetTaskForm();     // Limpa os campos (título, descrição, checklist)
+    resetTaskForm();
     setIsTaskModalOpen(true);
   };
 
@@ -197,7 +204,7 @@ export default function AdminProjectDetails() {
     setNewTaskDescription('');
     setNewTaskStart('');
     setNewTaskEnd('');
-    setChecklistItems(['']); // Reseta a checklist para um campo vazio
+    setChecklistItems(['']);
     setSelectedOrgIds([]);
     setNewTaskRequireMedia(false);
   };
@@ -205,13 +212,8 @@ export default function AdminProjectDetails() {
   const updateTaskMutation = useMutation({
     mutationFn: async (data: any) => api.patch(`/tasks/${data.id}`, data),
     onSuccess: () => {
-      toast.success('Tarefa atualizada com sucesso!', {
-        position: "top-right",
-        autoClose: 3000,
-      });
+      toast.success('Tarefa atualizada!');
       setIsTaskModalOpen(false);
-      setTaskToEdit(null);
-      setChecklistItems([]);
       queryClient.invalidateQueries({ queryKey: ['project', id] });
     },
     onError: (err: any) => {
@@ -227,11 +229,8 @@ export default function AdminProjectDetails() {
     e.preventDefault();
     if (!taskToEdit) return;
     const cleanChecklist = checklistItems
-      .filter(item => item && String(item).trim() !== "")
-      .map(item => (typeof item === 'object' ? (item as any).text : item));
-
-    console.log("🚀 Enviando para o servidor:", cleanChecklist);
-
+      .filter(item => typeof item === 'string' && item.trim() !== "")
+      .map(item => item.trim());
     try {
       await updateTaskMutation.mutateAsync({
         id: taskToEdit.id,
@@ -246,9 +245,11 @@ export default function AdminProjectDetails() {
       setIsTaskModalOpen(false);
       setTaskToEdit(null);
     } catch (err) {
-      console.error("❌ Erro ao salvar:", err);
+      console.error("Erro ao salvar:", err);
+      toast.error("Erro ao salvar as alterações.");
     }
   };
+
 
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: string) => api.delete(`/tasks/${taskId}`),
@@ -356,9 +357,9 @@ export default function AdminProjectDetails() {
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-gray-700">Lista de Atividades</h3>
               <button
-                onClick={() => { resetTaskForm(); setIsTaskModalOpen(true); }}
+                onClick={handleOpenCreateTask}
                 disabled={!isActive}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2"
               >
                 <Plus size={16} /> Nova Tarefa
               </button>
@@ -410,28 +411,26 @@ export default function AdminProjectDetails() {
                       <div className="flex items-center gap-2 self-end sm:self-center">
                         <button
                           onClick={() => {
-                            setTaskToEdit(task); // Define que É edição
+                            // 1. Limpeza total do estado anterior
+                            setChecklistItems([]);
+
+                            setTaskToEdit(task);
                             setNewTaskTitle(task.title);
                             setNewTaskDescription(task.description || '');
 
-                            // Formatação de datas
-                            if (task.startAt && task.endAt) {
-                              setNewTaskStart(task.startAt.split('T')[0] + 'T' + task.startAt.split('T')[1].substring(0, 5));
-                              setNewTaskEnd(task.endAt.split('T')[0] + 'T' + task.endAt.split('T')[1].substring(0, 5));
+                            // 2. Converta os Objetos do Prisma em Strings para os Inputs
+                            // Verificamos se task.checklist existe e tem itens
+                            if (task.checklist && task.checklist.length > 0) {
+                              const texts = task.checklist.map((item: any) => item.text);
+                              setChecklistItems(texts);
+                            } else {
+                              // Se não tem nada no banco, abre com um campo vazio para o usuário digitar
+                              setChecklistItems(['']);
                             }
 
-                            setSelectedOrgIds(task.organizations?.map((o: any) => o.id) || []);
-                            setNewTaskRequireMedia(task.requireMedia ?? false);
-
-                            // 🚀 CARREGAR ITENS: Verifique se 'task.checklist' não está vazio no console.log
-                            console.log("Checklist da tarefa:", task.checklist);
-                            const itemsFromDatabase = task.checklist?.map((item: any) => item.text) || [];
-                            setChecklistItems(itemsFromDatabase);
-
+                            // ... restante das datas e organizações
                             setIsTaskModalOpen(true);
                           }}
-                          title="Editar Tarefa"
-                          className="..."
                         >
                           <Pencil size={18} />
                         </button>
@@ -554,33 +553,56 @@ export default function AdminProjectDetails() {
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 animate-in zoom-in-95 duration-200 my-8">
+            {/* HEADER DA MODAL */}
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <h3 className="font-bold text-xl text-gray-800">
                 {taskToEdit ? 'Editar Tarefa' : 'Nova Tarefa'}
               </h3>
-              <button onClick={() => setIsTaskModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button
+                onClick={() => {
+                  setIsTaskModalOpen(false);
+                  resetTaskForm(); // 🚀 Garante que os estados sejam limpos ao fechar
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
 
             <div className="space-y-4">
-              {/* Título e Descrição */}
+              {/* TÍTULO */}
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Título</label>
-                <input type="text" placeholder="Ex: Dia 1 - Beber 2L de água" className="w-full border p-2.5 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Ex: Dia 1 - Beber 2L de água"
+                  className="w-full border p-2.5 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newTaskTitle}
+                  onChange={e => setNewTaskTitle(e.target.value)}
+                />
               </div>
 
+              {/* DESCRIÇÃO */}
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Descrição (Opcional)</label>
-                <textarea placeholder="Explique os detalhes da atividade..." className="w-full border p-2.5 rounded-lg mt-1 h-24 outline-none focus:ring-2 focus:ring-blue-500" value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} />
+                <textarea
+                  placeholder="Explique os detalhes da atividade..."
+                  className="w-full border p-2.5 rounded-lg mt-1 h-24 outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newTaskDescription}
+                  onChange={e => setNewTaskDescription(e.target.value)}
+                />
               </div>
 
               {/* SEÇÃO CHECKLIST DINÂMICA */}
               <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Checklist de Instruções</label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Checklist de Instruções
+                  </label>
                   <button
                     type="button"
-                    onClick={() => setChecklistItems([...checklistItems, ''])}
-                    className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded-md font-bold"
+                    onClick={addChecklistItem} // 🚀 Chama a função de adicionar
+                    className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-md font-bold hover:bg-blue-700 transition-colors"
                   >
                     + ADICIONAR ITEM
                   </button>
@@ -588,31 +610,33 @@ export default function AdminProjectDetails() {
 
                 <div className="space-y-2">
                   {checklistItems.map((item, index) => (
-                    <div key={index} className="flex gap-2">
+                    <div key={index} className="flex gap-2 animate-in fade-in slide-in-from-top-1">
                       <input
                         type="text"
-                        value={item} // Isso mostra o texto do item (ex: "Beber água")
-                        onChange={(e) => {
-                          const newItems = [...checklistItems];
-                          newItems[index] = e.target.value;
-                          setChecklistItems(newItems);
-                        }}
-                        className="flex-1 p-2 text-sm border rounded-lg outline-none focus:border-blue-500"
+                        value={item}
+                        onChange={(e) => updateChecklistItem(index, e.target.value)} // 🚀 Função de atualização
+                        placeholder="Instrução do checklist..."
+                        className="flex-1 p-2 text-sm border rounded-lg outline-none focus:border-blue-500 bg-white"
                       />
                       <button
                         type="button"
-                        onClick={() => setChecklistItems(checklistItems.filter((_, i) => i !== index))}
-                        className="p-2 text-red-500"
+                        onClick={() => removeChecklistItem(index)} // 🚀 Função de remoção
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <X size={16} />
                       </button>
                     </div>
                   ))}
 
-                  {/* Se for edição e o checklistItems estiver vazio, ele não mostra nada */}
+                  {checklistItems.length === 0 && (
+                    <p className="text-center text-[10px] text-slate-400 py-2">
+                      Nenhuma instrução adicionada.
+                    </p>
+                  )}
                 </div>
               </div>
-              {/* Datas */}
+
+              {/* DATAS */}
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
@@ -620,7 +644,7 @@ export default function AdminProjectDetails() {
                   </label>
                   <input
                     type="datetime-local"
-                    className="w-full h-11 bg-white border border-slate-200 px-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                    className="w-full h-11 bg-white border border-slate-200 px-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                     value={newTaskStart}
                     onChange={e => setNewTaskStart(e.target.value)}
                   />
@@ -631,20 +655,30 @@ export default function AdminProjectDetails() {
                   </label>
                   <input
                     type="datetime-local"
-                    className="w-full h-11 bg-white border border-slate-200 px-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                    className="w-full h-11 bg-white border border-slate-200 px-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
                     value={newTaskEnd}
                     onChange={e => setNewTaskEnd(e.target.value)}
                   />
                 </div>
               </div>
 
-              {/* Ações */}
+              {/* RODAPÉ / AÇÕES */}
               <div className="flex justify-end gap-3 pt-4 border-t mt-4">
-                <button onClick={() => setIsTaskModalOpen(false)} className="px-6 py-2.5 border rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancelar</button>
                 <button
+                  type="button"
+                  onClick={() => {
+                    setIsTaskModalOpen(false);
+                    resetTaskForm();
+                  }}
+                  className="px-6 py-2.5 border rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
                   onClick={taskToEdit ? handleEditTaskSubmit : handleCreateTask}
-                  disabled={createTaskMutation.isPending}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-100 flex items-center gap-2"
+                  disabled={createTaskMutation.isPending || updateTaskMutation.isPending}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-100 flex items-center gap-2 transition-all active:scale-95"
                 >
                   {taskToEdit ? 'Salvar Alterações' : 'Criar Tarefa'}
                 </button>
@@ -652,8 +686,7 @@ export default function AdminProjectDetails() {
             </div>
           </div>
         </div>
-      )
-      }
+      )}
 
       {
         taskToDelete && (

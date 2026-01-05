@@ -176,4 +176,10 @@ export class ProjectsController {
   ) {
     return this.projectsService.updateTask(taskId, data);
   }
+
+  @Get(':id/ranking')
+  @Roles(UserRole.ADMIN, UserRole.GESTOR_ORGANIZACAO, UserRole.USUARIO)
+  async getProjectRanking(@Param('id') id: string) {
+    return this.projectsService.getProjectRanking(id);
+  }
 }

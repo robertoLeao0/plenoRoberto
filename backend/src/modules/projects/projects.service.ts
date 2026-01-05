@@ -66,7 +66,13 @@ export class ProjectsService {
       where: { id },
       include: {
         organizations: true,
-        tasks: { take: 5, orderBy: { createdAt: 'desc' } },
+        tasks: {
+          orderBy: { startAt: 'asc' },
+          include: {
+            checklist: true,
+            organizations: true
+          }
+        },
       },
     });
     if (!project) throw new NotFoundException(`Projeto ${id} não encontrado.`);
@@ -133,32 +139,80 @@ export class ProjectsService {
     });
   }
 
+
+  async getProjectRanking(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        organizations: {
+          where: { deletedAt: null },
+          include: {
+            users: {
+              where: { deletedAt: null },
+              include: {
+                actionLogs: {
+                  where: {
+                    projectId: projectId,
+                    status: 'APROVADO'
+                  },
+                  select: { pointsAwarded: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!project) throw new NotFoundException('Projeto não encontrado');
+
+    const ranking = project.organizations.map(org => {
+      let totalPoints = 0;
+
+      org.users.forEach(user => {
+        const userPoints = user.actionLogs.reduce((sum, log) => sum + (log.pointsAwarded || 0), 0);
+        totalPoints += userPoints;
+      });
+
+      return {
+        organizationId: org.id,
+        name: org.name,
+        points: totalPoints,
+        membersCount: org.users.length
+      };
+    });
+
+    return ranking.sort((a, b) => b.points - a.points);
+  }
+
   async updateTask(taskId: string, data: any) {
     const { checklist, organizationIds, ...rest } = data;
+    return await this.prisma.$transaction(async (tx) => {
+      const updatedTask = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          ...rest,
+          startAt: data.startAt ? new Date(data.startAt) : undefined,
+          endAt: data.endAt ? new Date(data.endAt) : undefined,
+          organizations: organizationIds ? {
+            set: organizationIds.map((orgId: string) => ({ id: orgId }))
+          } : undefined,
+          checklist: checklist ? {
+            deleteMany: {},
+            create: checklist.map((text: string) => ({ text }))
+          } : undefined
+        },
+        include: { checklist: true, organizations: true }
+      });
+      await tx.dayTemplate.updateMany({
+        where: { projectId: updatedTask.projectId, title: updatedTask.title },
+        data: {
+          title: updatedTask.title,
+          description: updatedTask.description || '',
+        }
+      });
 
-    return await this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        ...rest,
-        // Garante a conversão correta de datas para o Prisma
-        startAt: data.startAt ? new Date(data.startAt) : undefined,
-        endAt: data.endAt ? new Date(data.endAt) : undefined,
-
-        // Atualiza o vínculo com as organizações
-        organizations: organizationIds ? {
-          set: organizationIds.map((orgId: string) => ({ id: orgId }))
-        } : undefined,
-
-        // 🚀 SOLUÇÃO DO CHECKLIST: Deleta os antigos e cria os novos enviados
-        checklist: checklist ? {
-          deleteMany: {}, // Limpa o que existia antes para essa tarefa
-          create: checklist.map((text: string) => ({ text })) // Cria os novos textos
-        } : undefined
-      },
-      include: {
-        checklist: true,
-        organizations: true
-      }
+      return updatedTask;
     });
   }
 
