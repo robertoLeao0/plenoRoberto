@@ -116,12 +116,11 @@ export class ProjectsService {
   async deletePermanent(id: string) {
     return this.prisma.project.delete({ where: { id } });
   }
-  // 1. Método que busca UMA tarefa específica com checklist (para o lápis de editar)
   async findTaskById(taskId: string) {
     return await this.prisma.task.findUnique({
       where: { id: taskId },
       include: {
-        checklist: true,      // 🚀 OBRIGATÓRIO: Sem isso a modal abre vazia
+        checklist: true,
         organizations: true
       }
     });
@@ -133,7 +132,7 @@ export class ProjectsService {
       where: { projectId },
       orderBy: { startAt: 'asc' },
       include: {
-        checklist: true,      // 🚀 OBRIGATÓRIO para a listagem do admin
+        checklist: true,
         organizations: true
       }
     });

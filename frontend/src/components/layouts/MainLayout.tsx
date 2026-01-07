@@ -48,12 +48,11 @@ const MENUS: Record<string, MenuItem[]> = {
     { label: 'Organizações', path: '/dashboard/admin/organizations', icon: Building2 },
     { label: 'Usuários', path: '/dashboard/admin/users', icon: Users },
     { label: 'Projetos', path: '/dashboard/admin/projects', icon: FolderKanban },
-    { label: 'Integrações', path: '/dashboard/admin/integrations', icon: Plug },
+    { label: 'Validar Tarefas', path: '/dashboard/admin/validation', icon: CheckSquare },
   ],
   GESTOR_ORGANIZACAO: [
     { label: 'Painel Gestor', path: '/dashboard/gestor', icon: LayoutDashboard, exact: true },
     { label: 'Meus Projetos', path: '/dashboard/gestor/projetos', icon: FolderKanban },
-    // NOVO ITEM ADICIONADO ABAIXO:
     { label: 'Minha Organização', path: '/dashboard/gestor/organizacao', icon: Building2 },
     { label: 'Minha Equipe', path: '/dashboard/gestor/equipe', icon: Users },
   ],

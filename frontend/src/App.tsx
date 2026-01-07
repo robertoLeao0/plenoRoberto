@@ -38,6 +38,7 @@ import ProjectTasks from './pages/admin/projects/Tasks';
 import Integrations from './pages/admin/integrations';
 import UserProfile from './pages/common/UserProfile';
 import ProjectDetails from './pages/admin/projects/Details';
+import AdminValidationPage from './pages/admin/validation/index';
 
 // Páginas - Organizações e Auditoria (Admin)
 import OrganizationsList from './pages/admin/organizations/List';
@@ -114,11 +115,10 @@ function DashboardWrapper() {
         <Route path="admin/projects/edit/:id" element={<EditTask />} />
         <Route path="admin/projects/:projectId/tasks" element={<ProjectTasks />} />
         <Route path="admin/projects/:id" element={<ProjectDetails />} />
-
-        {/* Admin - Integrações */}
+        {/* Admin - Validação */}
+        <Route path="admin/validation" element={<AdminValidationPage />} />
+        <Route path="admin/validation/:userId" element={<GestorValidationPage />} />
         <Route path="admin/integrations" element={<Integrations />} />
-
-        {/* Admin - Organizações */}
         <Route path="admin/organizations" element={<OrganizationsList />} />
         <Route path="admin/organizations/:id" element={<OrganizationDetails />} />
         <Route path="admin/organizations/:orgId/users/:userId" element={<UserProgress />} />

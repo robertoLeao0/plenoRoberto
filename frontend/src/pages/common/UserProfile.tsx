@@ -77,7 +77,6 @@ export default function UserProfile() {
     }
   };
 
-  // 🚀 FUNÇÃO DE ATUALIZAÇÃO DE SENHA CORRIGIDA
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     

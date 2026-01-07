@@ -102,7 +102,7 @@ export default function TaskActionPage() {
       });
     },
     onSuccess: () => {
-      toast.success(`Parabéns! Você ganhou ${currentPotentialPoints} pontos! 🚀`);
+      toast.success(`Parabéns! Você ganhou ${currentPotentialPoints} pontos!`);
       queryClient.invalidateQueries({ queryKey: ['project-journey'] });
       queryClient.invalidateQueries({ queryKey: ['task-detail'] });
       queryClient.invalidateQueries({ queryKey: ['user-me'] });

@@ -37,7 +37,6 @@ export class TaskService {
           organizations: {
             connect: orgsToConnect.map(id => ({ id })),
           },
-          // 🚀 CRIAÇÃO DA CHECKLIST
           checklist: {
             create: checklist.map(itemText => ({
               text: itemText
@@ -107,6 +106,32 @@ export class TaskService {
       }
     });
   }
+
+  async getGlobalStatus() {
+  const users = await this.prisma.user.findMany({
+    where: {
+      role: { not: 'ADMIN' }
+    },
+    include: {
+      organization: {
+        select: { name: true }
+      },
+      actionLogs: {
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      }
+    }
+  });
+
+  return users.map(user => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    organization: user.organization,
+    overallStatus: user.actionLogs[0]?.status || 'PENDENTE',
+    currentProjectId: user.actionLogs[0]?.projectId || null 
+  }));
+}
 
   async completeTask(userId: string, projectId: string, dayNumber: number, notes?: string, files?: any[]) {
     // ❌ REMOVA OU COMENTE ESTE BLOCO ABAIXO:

@@ -25,7 +25,6 @@ export default function RankingPage() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // 🚀 Lógica de Redirecionamento Inteligente
   useEffect(() => {
     if (!isLoadingProjects && projects) {
       // Se tiver só 1 projeto e estiver na página "vazia", vai direto para ele

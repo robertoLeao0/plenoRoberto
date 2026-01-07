@@ -227,29 +227,37 @@ export default function AdminProjectDetails() {
 
   const handleEditTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskToEdit) return;
-    const cleanChecklist = checklistItems
-      .filter(item => typeof item === 'string' && item.trim() !== "")
-      .map(item => item.trim());
+    if (!taskToEdit) {
+      toast.error("Nenhuma tarefa selecionada para edição.");
+      return;
+    }
+
+    // Validação das datas para evitar o erro 'Invalid time value'
+    if (!newTaskStart || !newTaskEnd) {
+      toast.warning("As datas de início e fim são obrigatórias.");
+      return;
+    }
+
     try {
+      const startDate = new Date(newTaskStart);
+      const endDate = new Date(newTaskEnd);
+
       await updateTaskMutation.mutateAsync({
         id: taskToEdit.id,
         title: newTaskTitle,
         description: newTaskDescription,
-        startAt: new Date(newTaskStart).toISOString(),
-        endAt: new Date(newTaskEnd).toISOString(),
+        startAt: startDate.toISOString(),
+        endAt: endDate.toISOString(),
         requireMedia: newTaskRequireMedia,
-        checklist: cleanChecklist,
+        checklist: checklistItems.filter(i => i.trim() !== ""),
         organizationIds: selectedOrgIds
       });
+
       setIsTaskModalOpen(false);
-      setTaskToEdit(null);
     } catch (err) {
-      console.error("Erro ao salvar:", err);
-      toast.error("Erro ao salvar as alterações.");
+      toast.error("Erro ao salvar alterações.");
     }
   };
-
 
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: string) => api.delete(`/tasks/${taskId}`),
@@ -393,8 +401,6 @@ export default function AdminProjectDetails() {
                               ))}
                             </div>
                           </div>
-
-                          {/* 🚀 EXIBIÇÃO DA CHECKLIST ADICIONADA AQUI */}
                           {task.checklist && task.checklist.length > 0 && (
                             <div className="mt-3 grid grid-cols-1 gap-1">
                               {task.checklist.map((item: any) => (
@@ -411,26 +417,38 @@ export default function AdminProjectDetails() {
                       <div className="flex items-center gap-2 self-end sm:self-center">
                         <button
                           onClick={() => {
-                            // 1. Limpeza total do estado anterior
-                            setChecklistItems([]);
-
+                            // 1. Define a tarefa que está sendo editada
                             setTaskToEdit(task);
                             setNewTaskTitle(task.title);
                             setNewTaskDescription(task.description || '');
 
-                            // 2. Converta os Objetos do Prisma em Strings para os Inputs
-                            // Verificamos se task.checklist existe e tem itens
-                            if (task.checklist && task.checklist.length > 0) {
-                              const texts = task.checklist.map((item: any) => item.text);
-                              setChecklistItems(texts);
-                            } else {
-                              // Se não tem nada no banco, abre com um campo vazio para o usuário digitar
-                              setChecklistItems(['']);
+                            // 2. FORMATAÇÃO DAS DATAS (Para carregar no input)
+                            // Converte de: 2026-01-07T13:43:00.000Z para: 2026-01-07T13:43
+                            if (task.startAt) {
+                              const dateStart = new Date(task.startAt);
+                              const formattedStart = new Date(dateStart.getTime() - dateStart.getTimezoneOffset() * 60000)
+                                .toISOString()
+                                .slice(0, 16);
+                              setNewTaskStart(formattedStart);
                             }
 
-                            // ... restante das datas e organizações
+                            if (task.endAt) {
+                              const dateEnd = new Date(task.endAt);
+                              const formattedEnd = new Date(dateEnd.getTime() - dateEnd.getTimezoneOffset() * 60000)
+                                .toISOString()
+                                .slice(0, 16);
+                              setNewTaskEnd(formattedEnd);
+                            }
+
+                            // 3. Carrega o checklist e organizações (Garante que o checklist venha do banco)
+                            const itemsFromDb = task.checklist?.map((item: any) => item.text) || [];
+                            setChecklistItems(itemsFromDb.length > 0 ? itemsFromDb : ['']);
+                            setSelectedOrgIds(task.organizations?.map((o: any) => o.id) || []);
+
+                            setNewTaskRequireMedia(task.requireMedia ?? false);
                             setIsTaskModalOpen(true);
                           }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
                         >
                           <Pencil size={18} />
                         </button>
@@ -561,7 +579,7 @@ export default function AdminProjectDetails() {
               <button
                 onClick={() => {
                   setIsTaskModalOpen(false);
-                  resetTaskForm(); // 🚀 Garante que os estados sejam limpos ao fechar
+                  resetTaskForm();
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
@@ -601,7 +619,7 @@ export default function AdminProjectDetails() {
                   </label>
                   <button
                     type="button"
-                    onClick={addChecklistItem} // 🚀 Chama a função de adicionar
+                    onClick={addChecklistItem}
                     className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-md font-bold hover:bg-blue-700 transition-colors"
                   >
                     + ADICIONAR ITEM
@@ -614,13 +632,13 @@ export default function AdminProjectDetails() {
                       <input
                         type="text"
                         value={item}
-                        onChange={(e) => updateChecklistItem(index, e.target.value)} // 🚀 Função de atualização
+                        onChange={(e) => updateChecklistItem(index, e.target.value)}
                         placeholder="Instrução do checklist..."
                         className="flex-1 p-2 text-sm border rounded-lg outline-none focus:border-blue-500 bg-white"
                       />
                       <button
                         type="button"
-                        onClick={() => removeChecklistItem(index)} // 🚀 Função de remoção
+                        onClick={() => removeChecklistItem(index)}
                         className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <X size={16} />
