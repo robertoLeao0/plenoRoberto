@@ -14,7 +14,7 @@ export default function Support() {
           Precisa de ajuda com o sistema? Entre em contato com nossa equipe técnica.
         </p>
         <button className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition">
-          Abrir Chamado
+          <a href="https://wa.me/5581981733448?text=Ol%C3%A1%2C%20preciso%20de%20ajuda">Abrir Chamado</a>
         </button>
       </div>
     </div>

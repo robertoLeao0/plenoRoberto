@@ -33,8 +33,11 @@ export default function AdminUsersList() {
     },
   });
 
+  const [importSummary, setImportSummary] = useState<{ success: number, errors: string[] } | null>(null);
+
   // 3. IMPORTAÇÃO (Mutation)
   const importMutation = useMutation({
+
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -47,16 +50,17 @@ export default function AdminUsersList() {
     },
     onSuccess: (data) => {
       const { success, errors } = data.data;
-      if (success > 0) toast.success(`${success} usuários importados!`);
+      setImportSummary({ success, errors });
 
-      if (errors && errors.length > 0) {
-        toast.warning(`${errors.length} erros encontrados. Verifique o console.`);
-        console.table(errors); // Mostra erros detalhados no F12
-      } else {
-        setIsImportModalOpen(false); // Só fecha se não tiver erros críticos pra corrigir
+      if (success > 0) {
+        toast.success(`${success} usuários novos importados com sucesso!`);
+        queryClient.invalidateQueries({ queryKey: ['users-list'] });
       }
-
-      queryClient.invalidateQueries({ queryKey: ['users-list'] });
+      if (errors && errors.length > 0) {
+        toast.warning(`${errors.length} registros não foram importados.`);
+      } else {
+        setIsImportModalOpen(false);
+      }
       setFileToUpload(null);
     },
     onError: () => toast.error('Erro ao conectar com o servidor.'),
@@ -70,7 +74,7 @@ export default function AdminUsersList() {
         EMAIL: 'fulano@email.com',
         TELEFONE: '11999999999',
         CPF: '12345678900',
-        TOKEN: 'COLE_O_TOKEN_DA_ORG_AQUI' // <--- Coluna Nova
+        TOKEN: 'COLE_O_TOKEN_DA_ORG_AQUI'
       }
     ]);
     const wb = XLSX.utils.book_new();
@@ -230,13 +234,16 @@ export default function AdminUsersList() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex justify-between mb-4">
               <h3 className="font-bold text-lg flex gap-2"><Upload className="text-green-600" /> Importar Usuários</h3>
-              <button onClick={() => setIsImportModalOpen(false)}><X size={20} /></button>
+              <button onClick={() => {
+                setIsImportModalOpen(false);
+                setImportSummary(null);
+              }}><X size={20} /></button>
             </div>
 
             <div className="space-y-4">
               <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
                 <p className="font-bold mb-1">Atenção:</p>
-                Para vincular o usuário à organização correta, preencha a coluna <strong>TOKEN</strong> na planilha. Você encontra este código na tela de detalhes da Organização.
+                Para vincular o usuário à organização correta, preencha a coluna <strong>TOKEN</strong> na planilha.
               </div>
 
               <button onClick={handleDownloadModel} className="text-sm text-blue-600 underline flex items-center gap-1">
@@ -244,7 +251,15 @@ export default function AdminUsersList() {
               </button>
 
               <div className="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50 relative">
-                <input type="file" accept=".xlsx" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFileToUpload(e.target.files?.[0] || null)} />
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={e => {
+                    setFileToUpload(e.target.files?.[0] || null);
+                    setImportSummary(null);
+                  }}
+                />
                 {fileToUpload ? (
                   <div className="text-green-600 font-medium flex flex-col items-center">
                     <FileSpreadsheet size={32} className="mb-2" />
@@ -255,6 +270,23 @@ export default function AdminUsersList() {
                 )}
               </div>
 
+              {/* LISTA DE ERROS E SUCESSOS */}
+              {importSummary && (
+                <div className={`p-3 rounded-lg border text-xs space-y-2 ${importSummary.errors.length > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold">Resultado: {importSummary.success} importados</span>
+                    {importSummary.errors.length > 0 && <span className="text-orange-600 font-bold">{importSummary.errors.length} falhas</span>}
+                  </div>
+
+                  {importSummary.errors.length > 0 && (
+                    <div className="max-h-32 overflow-y-auto pr-1 space-y-1">
+                      {importSummary.errors.map((err, idx) => (
+                        <p key={idx} className="text-orange-700 border-b border-orange-100 last:border-0 pb-1">• {err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => fileToUpload && importMutation.mutate(fileToUpload)}
                 disabled={!fileToUpload || importMutation.isPending}
