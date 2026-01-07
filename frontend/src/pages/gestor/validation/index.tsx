@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, X } from 'lucide-react';
+import { ArrowLeft, Check, X, Image as ImageIcon } from 'lucide-react';
 import api from '../../../services/api';
 
 interface ActionLog {
@@ -19,6 +19,26 @@ export default function GestorValidationPage() {
   const projectId = searchParams.get('projectId');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // 1. Função de Limpeza de URL (Crucial para resolver a foto quebrada e tela branca)
+  const getMediaUrl = (path: any) => {
+    if (!path) return '';
+    let cleanPath = path;
+
+    // Remove colchetes e aspas do formato JSON ["path"]
+    if (typeof path === 'string' && (path.startsWith('[') || path.startsWith('"'))) {
+      try {
+        const parsed = JSON.parse(path);
+        cleanPath = Array.isArray(parsed) ? parsed[0] : parsed;
+      } catch (e) {
+        cleanPath = path.replace(/[\[\]"']/g, '');
+      }
+    }
+
+    // Garante que o caminho aponte para o servidor na porta 3000
+    cleanPath = cleanPath.replace(/^\/?uploads[\\/]/, '');
+    return `http://localhost:3000/uploads/${cleanPath}`;
+  };
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ['user-logs', projectId, userId],
@@ -61,16 +81,35 @@ export default function GestorValidationPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {logs?.map((log) => (
           <div key={log.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="h-56 bg-slate-100 flex items-center justify-center border-b border-slate-100 relative">
+            <div className="h-56 bg-slate-100 flex items-center justify-center border-b border-slate-100 relative overflow-hidden">
               {log.photoUrl ? (
-                <img src={log.photoUrl} alt="Prova" className="w-full h-full object-cover cursor-pointer hover:opacity-90" onClick={() => window.open(log.photoUrl, '_blank')} />
+                // Lógica para Foto ou Vídeo
+                log.photoUrl.match(/\.(mp4|webm|mov|ogg)$/i) ? (
+                  <video 
+                    src={getMediaUrl(log.photoUrl)} 
+                    controls 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <img 
+                    src={getMediaUrl(log.photoUrl)} 
+                    alt="Prova" 
+                    className="w-full h-full object-cover cursor-pointer hover:opacity-90" 
+                    // Abre em nova aba para evitar tela branca no sistema
+                    onClick={() => window.open(getMediaUrl(log.photoUrl), '_blank')} 
+                  />
+                )
               ) : (
-                <div className="text-slate-400 text-sm">Sem foto</div>
+                <div className="text-slate-400 text-sm flex flex-col items-center gap-2">
+                  <ImageIcon size={24} />
+                  Sem evidência visual
+                </div>
               )}
               <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold uppercase shadow-sm ${log.status === 'EM_ANALISE' ? 'bg-orange-100 text-orange-700' : log.status === 'APROVADO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {log.status}
               </div>
             </div>
+            
             <div className="p-5 flex-1 flex flex-col">
               <h3 className="font-bold text-slate-800 mb-1">Dia {log.dayNumber}</h3>
               <p className="text-xs text-slate-500 mb-4">{new Date(log.createdAt).toLocaleDateString()}</p>
@@ -85,7 +124,7 @@ export default function GestorValidationPage() {
             </div>
           </div>
         ))}
-         {logs?.length === 0 && <div className="col-span-full text-center py-12 text-slate-400">Nenhuma atividade para validar.</div>}
+        {logs?.length === 0 && <div className="col-span-full text-center py-12 text-slate-400">Nenhuma atividade para validar.</div>}
       </div>
     </div>
   );

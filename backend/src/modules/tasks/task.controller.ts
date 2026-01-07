@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, Query, UseGuards,BadRequestException, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, Query, UseGuards, BadRequestException, Request } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ActionStatus } from '@prisma/client';
@@ -67,10 +67,22 @@ export class TaskController {
   }
 
   @Get('admin/global-status')
-async getGlobalStatus(@Request() req: any) {
-  if (req.user.role !== 'ADMIN') {
-    throw new BadRequestException('Acesso restrito ao administrador.');
+  async getGlobalStatus(@Request() req: any) {
+    if (req.user.role !== 'ADMIN') {
+      throw new BadRequestException('Acesso restrito ao administrador.');
+    }
+    return this.taskService.getGlobalStatus();
   }
-  return this.taskService.getGlobalStatus();
-}
+
+  @Get('projects/:projectId/users/:userId/logs')
+  async getUserLogs(
+    @Param('projectId') projectId: string,
+    @Param('userId') userId: string,
+    @Request() req: any
+  ) {
+    if (req.user.role === 'USUARIO') {
+      throw new BadRequestException('Acesso não autorizado aos logs de validação.');
+    }
+    return this.taskService.findUserLogsForValidation(projectId, userId);
+  }
 }

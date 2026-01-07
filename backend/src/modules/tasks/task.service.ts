@@ -54,6 +54,38 @@ export class TaskService {
     }
   }
 
+  async findUserLogsForValidation(projectId: string, userId: string) {
+    const logs = await this.prisma.actionLog.findMany({
+      where: { projectId, userId },
+      orderBy: { dayNumber: 'asc' },
+    });
+
+    return logs.map(log => {
+      let finalUrl = log.photoUrl;
+
+      if (finalUrl) {
+        // 1. Se estiver salvo como JSON ["path"], limpa para pegar apenas o texto
+        if (finalUrl.startsWith('[') || finalUrl.startsWith('"')) {
+          try {
+            const parsed = JSON.parse(finalUrl);
+            finalUrl = Array.isArray(parsed) ? parsed[0] : parsed;
+          } catch (e) {
+            finalUrl = finalUrl.replace(/[\[\]"']/g, '');
+          }
+        }
+
+        // 2. Garante que o caminho não tenha "uploads/" duplicado e adiciona o prefixo
+        const cleanPath = finalUrl.replace(/^uploads[\\/]/, '');
+        finalUrl = `/uploads/${cleanPath}`;
+      }
+
+      return {
+        ...log,
+        photoUrl: finalUrl
+      };
+    });
+  }
+
 
 
   async findMyTasks(organizationId: string) {
@@ -108,39 +140,32 @@ export class TaskService {
   }
 
   async getGlobalStatus() {
-  const users = await this.prisma.user.findMany({
-    where: {
-      role: { not: 'ADMIN' }
-    },
-    include: {
-      organization: {
-        select: { name: true }
-      },
-      actionLogs: {
-        orderBy: { createdAt: 'desc' },
-        take: 1
+    const users = await this.prisma.user.findMany({
+      where: { role: { not: 'ADMIN' } },
+      include: {
+        organization: { select: { name: true } },
+        actionLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
       }
-    }
-  });
+    });
 
-  return users.map(user => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    organization: user.organization,
-    overallStatus: user.actionLogs[0]?.status || 'PENDENTE',
-    currentProjectId: user.actionLogs[0]?.projectId || null 
-  }));
-}
+    return users.map(user => {
+      const lastLog = user.actionLogs[0];
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        organization: user.organization,
+        overallStatus: lastLog?.status || 'PENDENTE',
+        // Importante: garante que o frontend saiba qual projeto abrir
+        currentProjectId: lastLog?.projectId || null
+      };
+    });
+  }
 
   async completeTask(userId: string, projectId: string, dayNumber: number, notes?: string, files?: any[]) {
-    // ❌ REMOVA OU COMENTE ESTE BLOCO ABAIXO:
-    /* if (task.requireMedia && (!files || files.length === 0)) {
-      throw new BadRequestException('É obrigatório anexar ao menos uma foto ou vídeo.');
-    } 
-    */
-
-    // ✅ MANTENHA A LÓGICA DE PONTUAÇÃO DINÂMICA:
     const pointsAwarded = (files && files.length > 0) ? 25 : 10;
 
     const log = await this.prisma.actionLog.upsert({
@@ -150,8 +175,9 @@ export class TaskService {
       update: {
         status: 'EM_ANALISE',
         notes,
-        // Se não houver arquivos, salva como null ou string vazia
-        photoUrl: files && files.length > 0 ? JSON.stringify(files.map(f => f.path)) : null,
+        photoUrl: files && files.length > 0
+          ? (files.length === 1 ? files[0].path : JSON.stringify(files.map(f => f.path)))
+          : null,
         pointsAwarded: pointsAwarded
       },
       create: {
@@ -160,7 +186,9 @@ export class TaskService {
         dayNumber,
         status: 'EM_ANALISE',
         notes,
-        photoUrl: files && files.length > 0 ? JSON.stringify(files.map(f => f.path)) : null,
+        photoUrl: files && files.length > 0
+          ? (files.length === 1 ? files[0].path : JSON.stringify(files.map(f => f.path)))
+          : null,
         pointsAwarded: pointsAwarded
       }
     });
