@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Plus, Search, Building2, UserX, Upload, FileSpreadsheet, X, Filter, Phone, Mail 
+import {
+  Plus, Search, Building2, UserX, Upload, FileSpreadsheet, X, Filter, Phone, Mail
 } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -13,7 +13,7 @@ export default function AdminUsersList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
-  const [orgFilter, setOrgFilter] = useState(''); 
+  const [orgFilter, setOrgFilter] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
@@ -40,7 +40,7 @@ export default function AdminUsersList() {
       formData.append('file', file);
       // NÃO ENVIAMOS MAIS O organizationId AQUI.
       // O backend lerá o TOKEN de dentro da planilha.
-      
+
       return await api.post('/users/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -48,7 +48,7 @@ export default function AdminUsersList() {
     onSuccess: (data) => {
       const { success, errors } = data.data;
       if (success > 0) toast.success(`${success} usuários importados!`);
-      
+
       if (errors && errors.length > 0) {
         toast.warning(`${errors.length} erros encontrados. Verifique o console.`);
         console.table(errors); // Mostra erros detalhados no F12
@@ -65,11 +65,11 @@ export default function AdminUsersList() {
   // 4. DOWNLOAD MODELO (Atualizado com coluna TOKEN)
   const handleDownloadModel = () => {
     const ws = XLSX.utils.json_to_sheet([
-      { 
-        NOME: 'Fulano da Silva', 
-        EMAIL: 'fulano@email.com', 
-        TELEFONE: '11999999999', 
-        CPF: '12345678900', 
+      {
+        NOME: 'Fulano da Silva',
+        EMAIL: 'fulano@email.com',
+        TELEFONE: '11999999999',
+        CPF: '12345678900',
         TOKEN: 'COLE_O_TOKEN_DA_ORG_AQUI' // <--- Coluna Nova
       }
     ]);
@@ -78,14 +78,21 @@ export default function AdminUsersList() {
     XLSX.writeFile(wb, "modelo_importacao_usuarios.xlsx");
   };
 
-  const filteredUsers = Array.isArray(users) 
-    ? users.filter((u: any) => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase())) 
+  const filteredUsers = Array.isArray(users)
+    ? users.filter((u: any) => {
+      const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesOrg = !orgFilter ||
+        (orgFilter === 'null' ? !u.organizationId : u.organizationId === orgFilter);
+
+      return matchesSearch && matchesOrg;
+    })
     : [];
 
   return (
     <div className="space-y-6 p-6">
       <ToastContainer position="top-right" autoClose={3000} />
-      
+
       {/* HEADER: Título e Ações */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
@@ -94,19 +101,19 @@ export default function AdminUsersList() {
         </div>
 
         <div className="flex gap-2 w-full md:w-auto">
-          <button 
+          <button
             onClick={() => setIsImportModalOpen(true)}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             <FileSpreadsheet size={18} />
             <span className="hidden sm:inline">Importar</span>
           </button>
-          
-          <button 
+
+          <button
             onClick={() => navigate('/dashboard/admin/users/create')} // Ajuste a rota se necessário
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
-            <Plus size={18} /> 
+            <Plus size={18} />
             <span className="hidden sm:inline">Novo Usuário</span>
           </button>
         </div>
@@ -116,8 +123,8 @@ export default function AdminUsersList() {
       <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-          <input 
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+          <input
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Buscar por nome ou email..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -126,7 +133,7 @@ export default function AdminUsersList() {
 
         <div className="relative min-w-[200px]">
           <Filter className="absolute left-3 top-2.5 text-gray-400" size={20} />
-          <select 
+          <select
             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none cursor-pointer"
             value={orgFilter}
             onChange={(e) => setOrgFilter(e.target.value)}
@@ -221,41 +228,41 @@ export default function AdminUsersList() {
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-             <div className="flex justify-between mb-4">
-                <h3 className="font-bold text-lg flex gap-2"><Upload className="text-green-600"/> Importar Usuários</h3>
-                <button onClick={() => setIsImportModalOpen(false)}><X size={20}/></button>
-             </div>
-             
-             <div className="space-y-4">
-                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-                    <p className="font-bold mb-1">Atenção:</p>
-                    Para vincular o usuário à organização correta, preencha a coluna <strong>TOKEN</strong> na planilha. Você encontra este código na tela de detalhes da Organização.
-                </div>
+            <div className="flex justify-between mb-4">
+              <h3 className="font-bold text-lg flex gap-2"><Upload className="text-green-600" /> Importar Usuários</h3>
+              <button onClick={() => setIsImportModalOpen(false)}><X size={20} /></button>
+            </div>
 
-                <button onClick={handleDownloadModel} className="text-sm text-blue-600 underline flex items-center gap-1">
-                    <FileSpreadsheet size={14}/> Baixar Planilha Modelo
-                </button>
-                
-                <div className="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50 relative">
-                    <input type="file" accept=".xlsx" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFileToUpload(e.target.files?.[0] || null)} />
-                    {fileToUpload ? (
-                        <div className="text-green-600 font-medium flex flex-col items-center">
-                             <FileSpreadsheet size={32} className="mb-2"/>
-                             {fileToUpload.name}
-                        </div>
-                    ) : (
-                        <span className="text-gray-500">Clique ou arraste o arquivo aqui</span>
-                    )}
-                </div>
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
+                <p className="font-bold mb-1">Atenção:</p>
+                Para vincular o usuário à organização correta, preencha a coluna <strong>TOKEN</strong> na planilha. Você encontra este código na tela de detalhes da Organização.
+              </div>
 
-                <button 
-                  onClick={() => fileToUpload && importMutation.mutate(fileToUpload)}
-                  disabled={!fileToUpload || importMutation.isPending}
-                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
-                >
-                  {importMutation.isPending ? 'Enviando...' : 'Iniciar Importação'}
-                </button>
-             </div>
+              <button onClick={handleDownloadModel} className="text-sm text-blue-600 underline flex items-center gap-1">
+                <FileSpreadsheet size={14} /> Baixar Planilha Modelo
+              </button>
+
+              <div className="border-2 border-dashed border-gray-300 p-8 text-center rounded-lg cursor-pointer hover:bg-gray-50 relative">
+                <input type="file" accept=".xlsx" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFileToUpload(e.target.files?.[0] || null)} />
+                {fileToUpload ? (
+                  <div className="text-green-600 font-medium flex flex-col items-center">
+                    <FileSpreadsheet size={32} className="mb-2" />
+                    {fileToUpload.name}
+                  </div>
+                ) : (
+                  <span className="text-gray-500">Clique ou arraste o arquivo aqui</span>
+                )}
+              </div>
+
+              <button
+                onClick={() => fileToUpload && importMutation.mutate(fileToUpload)}
+                disabled={!fileToUpload || importMutation.isPending}
+                className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+              >
+                {importMutation.isPending ? 'Enviando...' : 'Iniciar Importação'}
+              </button>
+            </div>
           </div>
         </div>
       )}

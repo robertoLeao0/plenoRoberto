@@ -1,6 +1,6 @@
-import { 
-  Controller, Get, Post, Put, Patch, Body, Param, 
-  UseGuards, Req, UseInterceptors, UploadedFile, Query 
+import {
+  Controller, Get, Post, Put, Patch, Body, Param,
+  UseGuards, Req, UseInterceptors, UploadedFile, Query
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -9,7 +9,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 
 const storageConfig = diskStorage({
-  destination: './uploads/avatars', 
+  destination: './uploads/avatars',
   filename: (req, file, callback) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = extname(file.originalname);
@@ -20,7 +20,7 @@ const storageConfig = diskStorage({
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post()
   create(@Body() body: any) {
@@ -69,6 +69,12 @@ export class UsersController {
     return this.usersService.addUsersToOrganization(body.organizationId, body.userIds);
   }
 
+  @Patch('update-password')
+  @UseGuards(JwtAuthGuard)
+  async updatePassword(@Req() req: any, @Body() body: any) {
+    return this.usersService.updatePassword(req.user.id, body);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -78,4 +84,6 @@ export class UsersController {
   async update(@Param('id') id: string, @Body() body: any) {
     return this.usersService.update(id, body);
   }
+
+
 }
