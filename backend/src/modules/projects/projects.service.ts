@@ -138,6 +138,27 @@ export class ProjectsService {
     });
   }
 
+  async findMyProjects(userId: string) {
+  // Busca a organização do usuário logado
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true }
+  });
+
+  if (!user?.organizationId) return [];
+
+  // Retorna os projetos vinculados a essa organização
+  return this.prisma.project.findMany({
+    where: {
+      organizations: {
+        some: { id: user.organizationId }
+      },
+      deletedAt: null // Garante que não apareçam projetos deletados
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
 
   async getProjectRanking(projectId: string) {
     const project = await this.prisma.project.findUnique({
