@@ -18,6 +18,7 @@ interface Project {
   };
 }
 
+
 interface JourneyItem {
   dayNumber: number;
   title: string;

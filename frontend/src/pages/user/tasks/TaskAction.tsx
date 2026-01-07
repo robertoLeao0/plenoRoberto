@@ -102,11 +102,9 @@ export default function TaskActionPage() {
       });
     },
     onSuccess: () => {
-      toast.success(`Parabéns! Você ganhou ${currentPotentialPoints} pontos!`);
-      queryClient.invalidateQueries({ queryKey: ['project-journey'] });
-      queryClient.invalidateQueries({ queryKey: ['task-detail'] });
-      queryClient.invalidateQueries({ queryKey: ['user-me'] });
-      navigate('/dashboard/user/tarefas', { state: { openProject: projectId } });
+      toast.info("Tarefa enviada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ['user-jornada'] });
+      navigate(-1);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Erro ao enviar.');
@@ -152,7 +150,7 @@ export default function TaskActionPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* <div className="flex items-center gap-4">
           <div className="flex flex-col items-end">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score Total</span>
             <div className="flex items-center gap-1 text-blue-600 font-black text-xl">
@@ -160,7 +158,7 @@ export default function TaskActionPage() {
               {userPoints}
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       <div className="flex-1 p-6 pb-24 max-w-2xl mx-auto w-full">
@@ -287,8 +285,8 @@ export default function TaskActionPage() {
               onClick={() => submitMutation.mutate()}
               disabled={uploading || !allChecked} // 👈 Apenas estas duas travas
               className={`w-full py-5 rounded-3xl font-black text-lg transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${!allChecked
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white shadow-lg hover:bg-blue-700'
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white shadow-lg hover:bg-blue-700'
                 }`}
             >
               {uploading ? "Enviando..." : !allChecked ? "Conclua a Checklist" : `Concluir e Ganhar ${hasFiles ? 25 : 10} PTS`}
